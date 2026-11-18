@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choir Arranger</title>
+<meta name="description" content="Arrange balanced choir lineups, visual seat plans and printable sign-off sheets. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* Layout: sticky top bar (logo, stepper) → Home (hero, features, how-it-works, FAQ) or the 6-step wizard card → Like & Feedback band → disclaimer footer. Light theme only, drifting-note canvas behind. */
+:root {
+  --bg: #f3f6fb;
+  --surface: #ffffff;
+  --surface2: #f8fafd;
+  --ink: #172036;
+  --muted: #5b6680;
+  --dim: #8a93a8;
+  --line: #dde3ee;
+  --accent: #0e7c86;
+  --accent-ink: #0a5d65;
+  --accent-soft: #dff2f3;
+  --warn: #92560a; --warn-soft: #fdf1dc;
+  --bad: #b3261e; --bad-soft: #fdecea;
+  --good: #23794d; --good-soft: #ddf1e5;
+  --S: #c43d6e; --S-soft: #fbe5ee;
+  --A: #b8740b; --A-soft: #fbefd9;
+  --T: #2b8a57; --T-soft: #def2e6;
+  --B: #3a63c4; --B-soft: #e2eafa;
+  --M: #6b4fbb; --M-soft: #ece6fa;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow: 0 1px 2px rgba(23,32,54,.05), 0 8px 28px -10px rgba(23,32,54,.18);
+  --shadow2: 0 18px 50px -18px rgba(23,32,54,.35);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15.5px/1.55 var(--font-body); overflow-x: hidden; }
+#bgCanvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.page { position: relative; z-index: 1; }
+h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.015em; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+/* ---------- top bar ---------- */
+.top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1120px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+.logo { width: 38px; height: 38px; flex: none; }
+.logo .d { transform-box: fill-box; transform-origin: center; animation: sing 2.4s ease-in-out infinite; }
+.logo .d2 { animation-delay: .25s; } .logo .d3 { animation-delay: .5s; } .logo .d4 { animation-delay: .75s; }
+@keyframes sing { 0%, 60%, 100% { transform: scale(1); } 30% { transform: scale(1.22); } }
+.wordmark { font-family: var(--font-display); font-weight: 800; font-size: 1.22rem; letter-spacing: -0.02em; }
+.wordmark em { font-style: normal; color: var(--accent); }
+.steps-row { max-width: 1120px; margin: 0 auto; padding: 0 20px 8px; }
+.stepper { display: flex; gap: 4px; justify-content: center; overflow-x: auto; scrollbar-width: none; }
+.stepper::-webkit-scrollbar { display: none; }
+.stepper button { display: flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 99px; border: 0; background: transparent; color: var(--muted); font-size: .84rem; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background .25s, color .25s; }
+.stepper button b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .72rem; border: 1.5px solid var(--line); background: var(--surface); transition: .25s; }
+.stepper button:hover { background: var(--surface); color: var(--ink); }
+.stepper button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.stepper button.on b { background: var(--accent); border-color: var(--accent); color: #fff; }
+.stepper button.done b { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+@media (max-width: 760px) { .stepper { justify-content: flex-start; } .stepper button:not(.on) span { display: none; } }
+@media (max-width: 520px) { #topExample { display: none; } }
+.top-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.progress { height: 3px; } .progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .5s cubic-bezier(.2,.8,.2,1); }
+
+/* ---------- buttons & fields ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 16px; cursor: pointer; font-weight: 700; font-size: .9rem; white-space: nowrap; transition: transform .15s, border-color .2s, background .2s, box-shadow .2s; }
+.btn:hover { border-color: var(--dim); transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.98); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 8px 18px -10px var(--accent); }
+.btn.primary:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--ink); background: var(--surface); }
+.btn.big { padding: 13px 26px; font-size: 1rem; border-radius: 12px; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; transform: none; }
+.file-btn { position: relative; overflow: hidden; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+input[type=text], input[type=email], input[type=number], input[type=date], input[type=time], select, textarea { border: 1.5px solid var(--line); border-radius: 10px; background: var(--surface); padding: 9px 11px; min-width: 0; width: 100%; transition: border-color .2s, box-shadow .2s; }
+input:hover, select:hover, textarea:hover { border-color: #c4ccdb; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); outline: none; }
+textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field > label, .lbl { font-size: .82rem; font-weight: 700; }
+.hint { color: var(--muted); font-size: .86rem; }
+code { font-size: .85em; background: var(--surface2); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+.msg { font-size: .88rem; border-radius: 10px; padding: 9px 13px; background: var(--warn-soft); color: var(--warn); animation: rise .3s ease; }
+.msg.ok { background: var(--good-soft); color: var(--good); }
+.msg:empty { display: none; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: .76rem; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.chip.S { background: var(--S-soft); color: var(--S); } .chip.A { background: var(--A-soft); color: var(--A); }
+.chip.T { background: var(--T-soft); color: var(--T); } .chip.B { background: var(--B-soft); color: var(--B); }
+.chip.M { background: var(--M-soft); color: var(--M); } .chip.ex { background: var(--warn-soft); color: var(--warn); }
+.counts { display: flex; flex-wrap: wrap; gap: 6px; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* ---------- home ---------- */
+.hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 44px; align-items: center; padding: 56px 0 28px; }
+@media (max-width: 880px) { .hero { grid-template-columns: 1fr; padding-top: 32px; } }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: .78rem; color: var(--accent); font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.eyebrow::before { content: ""; width: 22px; height: 2px; background: var(--accent); border-radius: 2px; }
+.hero h1 { font-size: clamp(2.2rem, 5vw, 3.5rem); line-height: 1.04; font-weight: 800; margin: 14px 0 16px; min-height: 2.1em; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hl { display: inline-block; transition: opacity .45s, transform .45s, filter .45s; }
+.hl.out { opacity: 0; transform: translateY(14px); filter: blur(6px); }
+.hl.pre { opacity: 0; transform: translateY(-14px); filter: blur(6px); transition: none; }
+.hero .lead { font-size: 1.08rem; color: var(--muted); max-width: 52ch; margin-bottom: 24px; }
+.points { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: .9rem; color: var(--muted); margin-top: 22px; }
+.points span::before { content: "✓"; color: var(--good); font-weight: 800; margin-right: 7px; }
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow2); padding: 18px; transform: rotate(-1deg); transition: transform .5s; }
+.stage:hover { transform: rotate(0); }
+.stage-bar { display: flex; justify-content: space-between; align-items: center; font-size: .78rem; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+.stage svg { width: 100%; height: auto; display: block; }
+.stage .hd { transform-box: fill-box; transform-origin: center; animation: pop .5s cubic-bezier(.3,1.5,.5,1) both, sway 3s ease-in-out infinite; }
+@keyframes sway { 50% { transform: translateY(-2px); } }
+.legend-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; font-size: .78rem; color: var(--muted); font-weight: 600; margin-top: 6px; }
+.legend-row i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+.hsec { padding: 40px 0 0; opacity: 0; transform: translateY(18px); transition: opacity .6s, transform .6s; }
+.hsec.vis { opacity: 1; transform: none; }
+.hsec > h2 { font-size: 1.8rem; font-weight: 800; }
+.hsec > .sub { color: var(--muted); margin: 4px 0 18px; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 880px) { .features { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+.feat { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; transition: transform .3s, box-shadow .3s; }
+.feat:hover { transform: translateY(-3px); box-shadow: var(--shadow2); }
+.feat .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 1.15rem; margin-bottom: 12px; font-weight: 800; }
+.feat h3 { font-size: 1.08rem; margin-bottom: 4px; }
+.feat p { color: var(--muted); font-size: .9rem; }
+.flow { display: grid; grid-template-columns: repeat(6, 1fr); counter-reset: f; }
+@media (max-width: 880px) { .flow { grid-template-columns: repeat(3, 1fr); row-gap: 8px; } }
+@media (max-width: 520px) { .flow { grid-template-columns: 1fr 1fr; } }
+.flow div { position: relative; padding: 0 14px 10px 0; }
+.flow div::before { counter-increment: f; content: counter(f); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); font-family: var(--font-display); font-weight: 800; color: var(--accent); margin-bottom: 10px; position: relative; z-index: 1; }
+.flow div::after { content: ""; position: absolute; top: 17px; left: 34px; right: 0; height: 2px; background: var(--line); }
+.flow div:last-child::after { display: none; }
+.flow b { display: block; font-size: .95rem; }
+.flow span { font-size: .84rem; color: var(--muted); }
+.faq { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+@media (max-width: 760px) { .faq { grid-template-columns: 1fr; } }
+.faq details { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.faq summary { list-style: none; cursor: pointer; padding: 14px 16px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; margin-left: auto; font-size: 1.3rem; color: var(--dim); transition: transform .3s; line-height: 1; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq p { padding: 0 16px 16px; color: var(--muted); font-size: .92rem; }
+.soon { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 880px) { .soon { grid-template-columns: 1fr; } }
+.soon-c { position: relative; padding: 22px; border-radius: 16px; border: 1px solid var(--line); background: linear-gradient(135deg, var(--surface), var(--surface2)); overflow: hidden; transition: transform .3s, box-shadow .3s; }
+.soon-c:hover { transform: translateY(-3px); box-shadow: var(--shadow2); }
+.soon-c .sym { font-family: var(--font-display); font-size: 1.7rem; color: var(--accent); line-height: 1; }
+.soon-c h4 { font-size: 1.1rem; margin: 12px 0 6px; }
+.soon-c p { color: var(--muted); font-size: .9rem; }
+.soon-c .tag { position: absolute; top: 16px; right: 16px; font-size: .7rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 99px; padding: 2px 10px; background: var(--surface); animation: glow 2.4s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 0 0 0 5px var(--accent-soft); } }
+.soon-c::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 40%, color-mix(in srgb, var(--accent) 10%, transparent) 50%, transparent 60%) -100% 0 / 200% 100%; animation: sheen 4.5s ease-in-out infinite; pointer-events: none; }
+@keyframes sheen { 0%, 60% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+.cta-band { margin-top: 40px; border-radius: 20px; padding: 28px; background: var(--ink); color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; position: relative; overflow: hidden; }
+.cta-band h2 { font-size: 1.6rem; font-weight: 800; }
+.cta-band p { color: #c9d1df; }
+.cta-band .btn.primary { background: #fff; color: var(--ink); border-color: #fff; }
+
+/* ---------- wizard ---------- */
+.wiz { padding: 24px 0 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; box-shadow: var(--shadow); display: grid; gap: 18px; }
+@media (max-width: 560px) { .card { padding: 16px; } }
+.pane { display: none; gap: 18px; }
+.pane.on { display: grid; animation: stepin .4s cubic-bezier(.2,.8,.2,1); }
+.pane.on.back { animation-name: stepback; }
+@keyframes stepin { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes stepback { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+.sh { display: flex; gap: 16px; align-items: flex-start; }
+.sh .n { width: 46px; height: 46px; border-radius: 13px; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; font-family: var(--font-display); font-size: 1.3rem; font-weight: 800; flex: none; }
+.sh .of { font-size: .74rem; color: var(--dim); text-transform: uppercase; letter-spacing: .1em; font-weight: 800; }
+.sh h2 { font-size: 1.55rem; font-weight: 800; }
+.sh p { color: var(--muted); max-width: 66ch; margin-top: 2px; }
+.box { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; background: var(--surface2); }
+.box h3 { font-size: 1.02rem; }
+.addrow { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) auto; gap: 10px; align-items: end; }
+@media (max-width: 620px) { .addrow { grid-template-columns: 1fr 1fr; } .addrow .btn { grid-column: 1 / -1; } }
+.bulk { border: 1px dashed #c8d0de; border-radius: 12px; background: var(--surface); }
+.bulk summary { list-style: none; cursor: pointer; padding: 11px 14px; font-weight: 700; font-size: .9rem; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.bulk summary::-webkit-details-marker { display: none; }
+.bulk summary::before { content: "▸"; transition: transform .25s; }
+.bulk[open] summary::before { transform: rotate(90deg); }
+.bulk summary:hover { color: var(--ink); }
+.bulk .in { padding: 0 14px 14px; display: grid; gap: 10px; }
+.or { display: flex; align-items: center; gap: 10px; color: var(--dim); font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 12px; max-height: 420px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+thead th { position: sticky; top: 0; background: var(--surface); z-index: 2; font-size: .74rem; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+tbody tr { animation: fadeIn .3s ease both; }
+tbody tr:last-child td { border-bottom: 0; }
+@keyframes fadeIn { from { opacity: 0; } }
+td input[type=text] { border-color: transparent; background: transparent; padding: 5px 7px; }
+td input[type=text]:hover { border-color: var(--line); }
+td select { width: auto; padding: 4px 6px; font-size: .86rem; }
+.del { border: 0; background: transparent; color: var(--dim); cursor: pointer; font-size: 1.1rem; width: 30px; height: 30px; border-radius: 8px; }
+.del:hover { color: var(--bad); background: var(--bad-soft); }
+tr.group td { background: var(--surface2); font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.empty { color: var(--muted); text-align: center; padding: 26px 16px; border: 1.5px dashed var(--line); border-radius: 12px; font-size: .92rem; }
+.perf { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; background: var(--surface2); animation: rise .35s ease; }
+.perf-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.perf-badge { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: .85rem; }
+.perf-grid { display: grid; grid-template-columns: 2fr 1.3fr 1fr; gap: 10px; }
+.perf-grid2 { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .perf-grid, .perf-grid2 { grid-template-columns: 1fr 1fr; } .perf-grid .wide { grid-column: 1 / -1; } }
+.split { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.split label { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: .85rem; }
+.split input { width: 70px; padding: 6px 8px; }
+.toggle-line { display: inline-flex; align-items: center; gap: 8px; font-size: .88rem; font-weight: 600; cursor: pointer; }
+.toggle-line input { width: 18px; height: 18px; accent-color: var(--accent); }
+.stepper-num { display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.stepper-num button { border: 0; background: var(--surface2); width: 30px; height: 32px; cursor: pointer; font-weight: 800; }
+.stepper-num span { min-width: 30px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.inst-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.inst-item { display: inline-flex; align-items: center; gap: 8px; background: var(--M-soft); color: var(--M); border-radius: 10px; padding: 4px 4px 4px 10px; font-weight: 700; font-size: .85rem; }
+.auto-note { font-size: .82rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .84rem; color: var(--muted); align-items: center; }
+.cellbtn { width: 40px; height: 30px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface); cursor: pointer; font-size: .95rem; line-height: 1; color: var(--muted); transition: transform .15s, background .2s; }
+.cellbtn:hover { transform: scale(1.08); }
+.cellbtn { color: #b7c0d0; }
+.cellbtn.open { box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
+.pop { position: fixed; z-index: 60; display: flex; gap: 4px; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow2); animation: popin .18s ease; }
+@keyframes popin { from { opacity: 0; transform: translateY(4px) scale(.96); } }
+.pop button { border: 1.5px solid transparent; background: var(--surface2); border-radius: 9px; padding: 7px 11px; cursor: pointer; font-weight: 700; font-size: .84rem; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; transition: background .15s, border-color .15s; }
+.pop button:hover, .pop button:focus-visible { border-color: var(--accent); }
+.pop button.cur { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.pop .ok { color: var(--good); } .pop .no { color: var(--bad); } .pop .must { color: var(--accent); }
+.cellbtn.x { color: var(--bad); background: var(--bad-soft); border-color: #f4c7c3; }
+.cellbtn.p { background: var(--accent); color: #fff; border-color: var(--accent); }
+.legend .cellbtn { width: 30px; height: 24px; cursor: default; font-size: .8rem; }
+th.pcol { text-align: center; min-width: 78px; text-transform: none; letter-spacing: 0; line-height: 1.2; }
+th.pcol span { display: block; font-weight: 500; font-size: .72rem; }
+td.c { text-align: center; padding: 4px; }
+.rules { display: grid; gap: 4px; }
+.rule { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding: 12px; border-radius: 10px; transition: background .2s; }
+.rule:hover { background: var(--surface2); }
+.switch { position: relative; width: 42px; height: 24px; flex: none; margin-top: 1px; }
+.switch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; z-index: 1; }
+.switch span { position: absolute; inset: 0; background: #c9d1df; border-radius: 999px; transition: background .25s; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .25s cubic-bezier(.3,1.4,.5,1); }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); }
+.switch input:focus-visible + span { box-shadow: 0 0 0 4px var(--accent-soft); }
+.rule label { font-weight: 700; cursor: pointer; }
+.rule p { color: var(--muted); font-size: .86rem; margin-top: 2px; }
+.rule .inline { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: .86rem; }
+.rule .inline input, .rule .inline select { width: auto; padding: 6px 8px; }
+.layouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 680px) { .layouts { grid-template-columns: 1fr; } }
+.layout-opt { position: relative; border: 2px solid var(--line); border-radius: 14px; padding: 14px; cursor: pointer; display: grid; gap: 8px; background: var(--surface); transition: border-color .2s, transform .2s, box-shadow .2s; }
+.layout-opt:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.layout-opt input { position: absolute; opacity: 0; }
+.layout-opt:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.layout-opt:has(input:focus-visible) { outline: 3px solid var(--accent); }
+.layout-opt small { color: var(--muted); font-size: .8rem; }
+.mini { display: grid; gap: 3px; justify-content: center; }
+.mini div { display: flex; gap: 3px; justify-content: center; }
+.mini i { width: 13px; height: 13px; border-radius: 50%; display: block; }
+.mini i.S { background: var(--S); } .mini i.A { background: var(--A); } .mini i.T { background: var(--T); } .mini i.B { background: var(--B); }
+.plan-wrap { border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(#fff, #f7f9fd); padding: 8px; overflow-x: auto; }
+.plan-wrap svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.seat { cursor: pointer; transform-box: fill-box; transform-origin: center; animation: pop .45s cubic-bezier(.3,1.5,.5,1) both; animation-delay: calc(var(--i) * 14ms); }
+.seat:hover circle { stroke-width: 3; }
+.seat.sel circle { stroke: #172036; stroke-width: 3.5; stroke-dasharray: 4 3; }
+@keyframes pop { from { transform: scale(.2); opacity: 0; } }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.tab { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 7px 14px; cursor: pointer; font-weight: 700; font-size: .86rem; display: inline-flex; gap: 8px; align-items: center; transition: all .2s; }
+.tab small { font-weight: 600; color: var(--muted); }
+.tab.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.tab.on small { color: #c9d1df; }
+.tab .warnDot { width: 8px; height: 8px; border-radius: 50%; background: #e0a43a; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 620px) { .tiles { grid-template-columns: 1fr 1fr; } }
+.tile { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
+.tile b { display: block; font-family: var(--font-display); font-size: 1.5rem; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.tile span { font-size: .78rem; color: var(--muted); }
+.tile.good b { color: var(--good); } .tile.warn b { color: var(--warn); }
+.perf-view { display: grid; gap: 14px; animation: rise .35s ease; }
+.pv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.pv-head .when { color: var(--muted); font-size: .9rem; }
+.fill { font-size: .82rem; font-weight: 800; border-radius: 999px; padding: 4px 12px; font-variant-numeric: tabular-nums; }
+.fill.full { background: var(--good-soft); color: var(--good); } .fill.short { background: var(--warn-soft); color: var(--warn); }
+.sections { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+@media (max-width: 760px) { .sections { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sec { padding: 10px 12px; border-right: 1px solid var(--line); min-width: 0; background: var(--surface); }
+.sec:last-child { border-right: 0; }
+.sec-title { display: flex; justify-content: space-between; font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2.5px solid currentColor; padding-bottom: 4px; margin-bottom: 6px; }
+.sec.S .sec-title { color: var(--S); } .sec.A .sec-title { color: var(--A); } .sec.T .sec-title { color: var(--T); } .sec.B .sec-title { color: var(--B); } .sec.M .sec-title { color: var(--M); }
+.sec ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: .87rem; }
+.sec li { display: flex; justify-content: space-between; gap: 6px; overflow-wrap: anywhere; }
+.sec li small { color: var(--muted); font-size: .72rem; white-space: nowrap; }
+.sec li.none { color: var(--muted); font-style: italic; font-size: .8rem; }
+.notes { border-radius: 10px; padding: 10px 14px; background: var(--warn-soft); color: var(--warn); font-size: .86rem; display: grid; gap: 3px; }
+.export { display: grid; gap: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 18px; background: linear-gradient(135deg, var(--accent-soft), #fff 62%); }
+.copybox { display: none; gap: 6px; } .copybox.show { display: grid; }
+.nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid var(--line); padding-top: 18px; }
+.nav .hint { text-align: center; flex: 1; }
+
+/* ---------- floating like + feedback ---------- */
+.fab { position: fixed; right: 22px; bottom: 22px; z-index: 50; display: flex; flex-direction: column; gap: 12px; align-items: flex-end; }
+.fb { position: relative; width: 54px; height: 54px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow2); cursor: pointer; display: grid; place-items: center; color: var(--S); transition: transform .25s cubic-bezier(.3,1.5,.5,1), background .3s; }
+.fb:hover { transform: translateY(-2px) scale(1.06); }
+.fb svg { width: 24px; height: 24px; }
+.fb .lab { position: absolute; right: 66px; top: 50%; transform: translate(6px, -50%); background: var(--ink); color: #fff; padding: 6px 11px; border-radius: 8px; font-size: .82rem; font-weight: 600; white-space: nowrap; opacity: 0; pointer-events: none; transition: .2s; }
+.fb:hover .lab, .fb:focus-visible .lab { opacity: 1; transform: translate(0, -50%); }
+.fb.like svg { fill: none; stroke: currentColor; stroke-width: 2; }
+.fb.like.on { background: var(--S); border-color: var(--S); color: #fff; }
+.fb.like.on svg { fill: currentColor; animation: beat .55s; }
+.fb .badge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: var(--ink); color: #fff; font-size: .7rem; font-weight: 800; display: grid; place-items: center; font-variant-numeric: tabular-nums; }
+.fb.feed { background: var(--accent); border-color: var(--accent); color: #fff; }
+@keyframes beat { 35% { transform: scale(1.35); } 70% { transform: scale(.92); } }
+.ov { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 16px; background: rgba(20,30,45,.35); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .25s; }
+.ov.show { opacity: 1; pointer-events: auto; }
+.modal { width: min(480px, 100%); max-height: 92vh; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 26px; box-shadow: var(--shadow2); transform: translateY(14px) scale(.98); transition: transform .35s cubic-bezier(.2,1,.3,1); }
+.ov.show .modal { transform: none; }
+.modal h3 { font-size: 1.35rem; font-weight: 800; }
+.modal .x { float: right; margin: -8px -8px 0 0; }
+.copy { font-weight: 600; color: var(--ink); }
+.fbform { display: grid; gap: 10px; }
+.fbform textarea { min-height: 96px; }
+.floaty { position: fixed; z-index: 70; pointer-events: none; animation: floatup 1.2s ease-out forwards; }
+.floaty svg { width: 18px; height: 18px; fill: var(--S); }
+@keyframes floatup { 0% { opacity: 1; transform: translate(0,0) scale(.5); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.2); } }
+
+footer.foot { margin: 36px 0 40px; color: var(--muted); font-size: .84rem; display: grid; gap: 6px; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); border-left: 4px solid var(--good); border-radius: 14px; padding: 16px 18px; }
+footer.foot strong { color: var(--ink); }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 30px); opacity: 0; background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-weight: 600; font-size: .9rem; z-index: 80; transition: all .35s cubic-bezier(.2,.8,.2,1); pointer-events: none; max-width: calc(100% - 32px); text-align: center; }
+.toast.show { transform: translate(-50%, 0); opacity: 1; }
+.sr { position: absolute; left: -9999px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .hsec { opacity: 1; transform: none; } }
+</style>
+<link rel="stylesheet" href="useful-indeed/footer.css">
+<script src="version-log.js"></script>
+<link rel="canonical" href="https://choirarranger.useful-indeed.com/">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="apple-touch-icon" href="logo.svg">
+<style id="useful-indeed-mobile">.ui-applogo{border-radius:10px;display:block}</style>
+</head>
+<body>
+<canvas id="bgCanvas" aria-hidden="true"></canvas>
+<div class="page">
+  <header class="top">
+    <div class="top-in">
+      <button class="brand" id="brand" type="button" aria-label="Choir Arranger home">
+        <img class="logo ui-applogo" src="logo.svg" alt="" width="38" height="38">
+        <span class="wordmark">Choir <em>Arranger</em></span>
+      </button>
+      <div class="top-actions">
+        <button class="btn ghost" id="topExample" type="button">Load example</button>
+        <button class="btn ghost" id="resetAll" type="button" hidden>Start over</button>
+        <button class="btn primary" id="topStart" type="button">Get started</button>
+      </div>
+    </div>
+    <div class="steps-row" id="stepsRow" hidden><nav class="stepper" id="stepper" aria-label="Steps"></nav></div>
+    <div class="progress" id="progress" hidden><i id="progressBar"></i></div>
+  </header>
+
+  <!-- ================= HOME ================= -->
+  <section id="home" class="wrap">
+    <div class="hero">
+      <div>
+        <span class="eyebrow">For choir performances &amp; worship services</span>
+        <h1><span class="hl" id="headline">Arrange your choir <em>in minutes.</em></span></h1>
+        <p class="lead">Whether it's a concert or a weekly worship service, list your singers and musicians, set your dates, and get balanced lineups, a seat plan and a printable sign-off sheet for every one.</p>
+        <div class="row">
+          <button class="btn primary big" id="heroStart" type="button">Get started →</button>
+          <button class="btn big" id="heroExample" type="button">Try with example data</button>
+        </div>
+        <div class="points"><span>Free, no sign-up</span><span>Concerts and worship services</span><span>Nothing saved</span></div>
+      </div>
+      <div class="stage" aria-hidden="true">
+        <div class="stage-bar"><span>Seat plan preview</span><span>Row 1 → nearest audience</span></div>
+        <svg id="heroPlan" viewBox="-330 -330 660 330"></svg>
+        <div class="legend-row"><span><i style="background:var(--S)"></i>Soprano</span><span><i style="background:var(--A)"></i>Alto</span><span><i style="background:var(--T)"></i>Tenor</span><span><i style="background:var(--B)"></i>Bass</span><span><i style="background:var(--M);border-radius:3px"></i>Musician</span></div>
+      </div>
+    </div>
+
+    <div class="hsec">
+      <h2>Everything a facilitator needs</h2>
+      <p class="sub">Built for the person who organises the choir's services, concerts, schedules and seating.</p>
+      <div class="features">
+        <div class="feat"><div class="ic" style="background:var(--S-soft);color:var(--S)">♪</div><h3>Balanced lineups</h3><p>Sopranos, altos, tenors and basses split by your numbers, with S1/S2 and T1/T2 kept even.</p></div>
+        <div class="feat"><div class="ic" style="background:var(--T-soft);color:var(--T)">◠</div><h3>Visual seat plans</h3><p>Pick a formation and get a seat map for each event. Click two singers to swap seats.</p></div>
+        <div class="feat"><div class="ic" style="background:var(--B-soft);color:var(--B)">✎</div><h3>Sign-off sheets</h3><p>A print-ready PDF with names, voice parts, seats and signature columns for acceptance and performance.</p></div>
+        <div class="feat"><div class="ic" style="background:var(--M-soft);color:var(--M)">♫</div><h3>Musicians included</h3><p>Pianists, organists, guitarists and more are scheduled and placed beside the choir.</p></div>
+        <div class="feat"><div class="ic" style="background:var(--A-soft);color:var(--A)">↻</div><h3>Fair rotation</h3><p>Let people sing once each, or rotate fairly with a limit. Mark who can't come or must be there.</p></div>
+        <div class="feat"><div class="ic" style="background:var(--good-soft);color:var(--good)">0</div><h3>Zero data retention</h3><p>Your member list stays in your browser. Close the tab and it's gone.</p></div>
+      </div>
+    </div>
+
+    <div class="hsec">
+      <h2>How it works</h2>
+      <p class="sub">Six short steps. You can go back and change anything.</p>
+      <div class="flow">
+        <div><b>Singers</b><span>Name and voice part</span></div>
+        <div><b>Musicians</b><span>Name and instrument</span></div>
+        <div><b>Performances</b><span>Dates and how many</span></div>
+        <div><b>Availability</b><span>Who can or must come</span></div>
+        <div><b>Seating</b><span>Choose a formation</span></div>
+        <div><b>Arrangement</b><span>Review and download</span></div>
+      </div>
+    </div>
+
+    <div class="hsec">
+      <h2>Coming soon</h2>
+      <p class="sub">We're already working on what's next.</p>
+      <div class="soon">
+        <div class="soon-c"><span class="tag">Coming soon</span><div class="sym">⇄</div><h4>Reserve singers</h4><p>Pick back-up singers for each service or performance, ready to step in if a member can't make it.</p></div>
+        <div class="soon-c"><span class="tag">Coming soon</span><div class="sym">✥</div><h4>Drag-and-drop seating</h4><p>Move members around the seat plan by dragging them to the spot you want.</p></div>
+        <div class="soon-c"><span class="tag">Coming soon</span><div class="sym">♫</div><h4>Calm music while you work</h4><p>Play soft background music while you build your arrangements.</p></div>
+      </div>
+    </div>
+
+    <div class="hsec">
+      <h2>Questions</h2>
+      <p class="sub">Quick answers before you start.</p>
+      <div class="faq">
+        <details><summary>Is my members' information saved anywhere?</summary><p>No. Names, voice parts and schedules stay in this browser tab only. Refresh or close the page and they're erased. Download your PDF before leaving.</p></details>
+        <details><summary>Can I upload my list from Excel?</summary><p>Yes. In Excel choose File → Save As → CSV, then upload it. Use two columns: name and voice part (or instrument for musicians).</p></details>
+        <details><summary>What's in the PDF?</summary><p>For each performance: a landscape seat plan page, then a portrait sign-off form with name, voice part, seat, an acceptance signature and a performance signature.</p></details>
+        <details><summary>Can I use this for weekly worship services?</summary><p>Yes. Add each service as a performance (for example, every Sunday of the month) and the tool rotates members fairly across them.</p></details>
+        <details><summary>Can the same person sing in every performance?</summary><p>Your choice. Turn on repeats with an optional limit, or turn it off so each person performs once and everyone gets a turn.</p></details>
+      </div>
+    </div>
+
+    <div class="cta-band hsec">
+      <div><h2>Ready to arrange?</h2><p>Start with a blank list or explore the example first.</p></div>
+      <div class="row"><button class="btn primary big" id="ctaStart" type="button">Get started →</button></div>
+    </div>
+  </section>
+
+  <!-- ================= WIZARD ================= -->
+  <section id="wizard" class="wrap wiz" hidden>
+    <main class="card">
+      <!-- STEP 1 -->
+      <section class="pane" data-step="1" aria-labelledby="s1h">
+        <div class="sh"><div class="n">1</div><div><div class="of">Step 1 of 6</div><h2 id="s1h">Who's singing?</h2><p>Add each choir member with their voice part. You can also paste a list or upload a file.</p></div></div>
+        <div class="grid2">
+          <div class="field"><label for="groupName">Choir or group name</label><input type="text" id="groupName" placeholder="e.g. Harmony Voices"></div>
+          <div class="field"><label for="facilitator">Facilitator (you)</label><input type="text" id="facilitator" placeholder="Your name, printed on the PDF"></div>
+        </div>
+        <form class="box" id="singerForm" novalidate>
+          <h3>Add a singer</h3>
+          <div class="addrow">
+            <div class="field"><label for="sName">Name</label><input type="text" id="sName" placeholder="e.g. Maria Santos" autocomplete="off"></div>
+            <div class="field"><label for="sVoice">Voice part</label>
+              <select id="sVoice">
+                <option value="">Choose…</option>
+                <optgroup label="Soprano"><option value="S|S">Soprano (S)</option><option value="S|S1">Soprano 1 (S1)</option><option value="S|S2">Soprano 2 (S2)</option></optgroup>
+                <optgroup label="Alto"><option value="A|A">Alto (A)</option><option value="A|A1">Alto 1 (A1)</option><option value="A|A2">Alto 2 (A2)</option><option value="A|Mezzo">Mezzo-soprano</option><option value="A|CT">Countertenor</option></optgroup>
+                <optgroup label="Tenor"><option value="T|T">Tenor (T)</option><option value="T|T1">Tenor 1 (T1)</option><option value="T|T2">Tenor 2 (T2)</option></optgroup>
+                <optgroup label="Bass"><option value="B|B">Bass (B)</option><option value="B|B1">Bass 1 (B1)</option><option value="B|B2">Bass 2 (B2)</option><option value="B|Bar">Baritone</option></optgroup>
+              </select></div>
+            <button class="btn primary" type="submit">+ Add</button>
+          </div>
+          <div class="msg" id="singerMsg" aria-live="polite"></div>
+          <div class="or">or add many at once</div>
+          <details class="bulk">
+            <summary>Paste a list or upload a file</summary>
+            <div class="in">
+              <textarea id="pasteSingers" aria-label="Paste singers" placeholder="Maria Santos, S1&#10;Joy Dela Cruz, S2&#10;Paolo Reyes, T&#10;Mark Lim, Bar"></textarea>
+              <p class="hint">One per line: name, then voice part (<code>S1</code>, <code>A</code>, <code>T2</code>, <code>Bar</code>, <code>Mezzo</code>…). Files: .csv or .txt with the same two columns.</p>
+              <div class="row">
+                <button class="btn" id="addSingers" type="button">Add from list</button>
+                <label class="btn file-btn" for="fileSingers">⇪ Upload .csv / .txt<input type="file" id="fileSingers" accept=".csv,.txt,.tsv,text/csv,text/plain"></label>
+              </div>
+            </div>
+          </details>
+        </form>
+        <div class="row" style="justify-content:space-between"><h3>Singer list</h3><div class="row"><div class="counts" id="singerCounts"></div><button class="btn ghost" id="clearSingers" type="button">Clear list</button></div></div>
+        <div id="singerList"></div>
+      </section>
+
+      <!-- STEP 2 -->
+      <section class="pane" data-step="2" aria-labelledby="s2h">
+        <div class="sh"><div class="n">2</div><div><div class="of">Step 2 of 6</div><h2 id="s2h">Any musicians?</h2><p>Add pianists, organists, guitarists, drummers or others. No musicians? Just press Next.</p></div></div>
+        <form class="box" id="musicianForm" novalidate>
+          <h3>Add a musician</h3>
+          <div class="addrow">
+            <div class="field"><label for="mName">Name</label><input type="text" id="mName" placeholder="e.g. Leo Tan" autocomplete="off"></div>
+            <div class="field"><label for="mInst">Instrument</label><input type="text" id="mInst" list="instList" placeholder="e.g. Piano" autocomplete="off"></div>
+            <button class="btn primary" type="submit">+ Add</button>
+          </div>
+          <div class="msg" id="musicianMsg" aria-live="polite"></div>
+          <div class="or">or add many at once</div>
+          <details class="bulk">
+            <summary>Paste a list or upload a file</summary>
+            <div class="in">
+              <textarea id="pasteMusicians" aria-label="Paste musicians" placeholder="Leo Tan, Piano&#10;Grace Uy, Organ&#10;Jun Rivera, Guitar"></textarea>
+              <div class="row">
+                <button class="btn" id="addMusicians" type="button">Add from list</button>
+                <label class="btn file-btn" for="fileMusicians">⇪ Upload .csv / .txt<input type="file" id="fileMusicians" accept=".csv,.txt,.tsv,text/csv,text/plain"></label>
+              </div>
+            </div>
+          </details>
+        </form>
+        <datalist id="instList"><option value="Piano"><option value="Organ"><option value="Keyboard"><option value="Guitar"><option value="Bass guitar"><option value="Drums"><option value="Percussion"><option value="Violin"><option value="Cello"><option value="Flute"><option value="Trumpet"><option value="Saxophone"></datalist>
+        <div class="row" style="justify-content:space-between"><h3>Musician list</h3><div class="row"><div class="counts" id="musicianCounts"></div><button class="btn ghost" id="clearMusicians" type="button">Clear list</button></div></div>
+        <div id="musicianList"></div>
+      </section>
+
+      <!-- STEP 3 -->
+      <section class="pane" data-step="3" aria-labelledby="s3h">
+        <div class="sh"><div class="n">3</div><div><div class="of">Step 3 of 6</div><h2 id="s3h">When are you performing?</h2><p>Add each performance and how many singers and musicians you need. Sections split automatically unless you set exact numbers.</p></div></div>
+        <div id="perfList" style="display:grid;gap:12px"></div>
+        <div><button class="btn primary" id="addPerf" type="button">+ Add a performance</button></div>
+      </section>
+
+      <!-- STEP 4 -->
+      <section class="pane" data-step="4" aria-labelledby="s4h">
+        <div class="sh"><div class="n">4</div><div><div class="of">Step 4 of 6</div><h2 id="s4h">Who's available, and what are the rules?</h2><p>Everyone starts as available. Point at a box (or tap it) and choose Available, Can't come, or Must include.</p></div></div>
+        <div class="legend">
+          <span><button class="cellbtn" type="button" tabindex="-1" aria-hidden="true">✓</button> Available</span>
+          <span><button class="cellbtn x" type="button" tabindex="-1" aria-hidden="true">✕</button> Can't come</span>
+          <span><button class="cellbtn p" type="button" tabindex="-1" aria-hidden="true">★</button> Must include</span>
+        </div>
+        <div id="availGrid"></div>
+        <h3 style="margin-top:6px">Rules</h3>
+        <div class="rules">
+          <div class="rule"><div class="switch"><input type="checkbox" id="optRepeat"><span></span></div>
+            <div><label for="optRepeat">Allow the same person in more than one performance</label><p>On: people can be picked again, starting with those who've performed least. Off: each person performs once, so everyone gets a turn.</p>
+              <div class="inline" id="maxWrap"><label for="optMax">Most performances per person</label><input type="number" id="optMax" min="1" placeholder="No limit" style="width:110px"></div></div></div>
+          <div class="rule"><div class="switch"><input type="checkbox" id="optDupNames"><span></span></div>
+            <div><label for="optDupNames">Allow repeated names in the list</label><p>Off: a name already on the list is skipped when you add or upload. Turn on if two members share a name.</p></div></div>
+          <div class="rule"><div class="switch"><input type="checkbox" id="optFill"><span></span></div>
+            <div><label for="optFill">Fill empty seats from other sections</label><p>If a section doesn't have enough people, add singers from other parts to reach the total.</p></div></div>
+          <div class="rule"><div class="switch"><input type="checkbox" id="optSub"><span></span></div>
+            <div><label for="optSub">Keep divided parts even</label><p>Pick a balanced mix of S1/S2, T1/T2 and so on within each section.</p></div></div>
+          <div class="rule"><span></span><div><label for="optSplit">How to split singers automatically</label>
+            <div class="inline" style="margin-top:6px"><select id="optSplit"><option value="prop">By the size of each section</option><option value="equal">Equal numbers of S, A, T, B</option></select></div></div></div>
+        </div>
+      </section>
+
+      <!-- STEP 5 -->
+      <section class="pane" data-step="5" aria-labelledby="s5h">
+        <div class="sh"><div class="n">5</div><div><div class="of">Step 5 of 6</div><h2 id="s5h">How should the choir stand?</h2><p>Pick a formation. Each performance gets its own seat plan, and you can fine-tune it in the next step.</p></div></div>
+        <fieldset style="border:0;padding:0;margin:0"><legend class="sr">Formation</legend>
+          <div class="layouts">
+            <label class="layout-opt"><input type="radio" name="layout" value="split"><div class="mini"><div><i class="T"></i><i class="T"></i><i class="T"></i><i class="B"></i><i class="B"></i><i class="B"></i></div><div><i class="S"></i><i class="S"></i><i class="S"></i><i class="A"></i><i class="A"></i><i class="A"></i></div></div><b>Classic</b><small>Sopranos and altos in front, tenors and basses behind</small></label>
+            <label class="layout-opt"><input type="radio" name="layout" value="blocks"><div class="mini"><div><i class="S"></i><i class="S"></i><i class="A"></i><i class="A"></i><i class="T"></i><i class="T"></i><i class="B"></i><i class="B"></i></div><div><i class="S"></i><i class="S"></i><i class="A"></i><i class="A"></i><i class="T"></i><i class="T"></i><i class="B"></i><i class="B"></i></div></div><b>Side by side</b><small>Each section in its own block, S · A · T · B left to right</small></label>
+            <label class="layout-opt"><input type="radio" name="layout" value="mixed"><div class="mini"><div><i class="S"></i><i class="A"></i><i class="T"></i><i class="B"></i><i class="S"></i><i class="A"></i><i class="T"></i><i class="B"></i></div><div><i class="S"></i><i class="A"></i><i class="T"></i><i class="B"></i><i class="S"></i><i class="A"></i><i class="T"></i><i class="B"></i></div></div><b>Mixed quartets</b><small>S A T B groups repeated across every row</small></label>
+          </div>
+        </fieldset>
+        <div class="grid2">
+          <div class="field"><label for="seatRows">Number of rows</label><select id="seatRows"><option value="auto">Automatic (about 10 per row)</option><option value="1">1 row</option><option value="2">2 rows</option><option value="3">3 rows</option><option value="4">4 rows</option><option value="5">5 rows</option><option value="6">6 rows</option></select></div>
+          <div class="field"><label for="instSide">Where musicians sit</label><select id="instSide"><option value="left">Left of the choir</option><option value="right">Right of the choir</option></select></div>
+        </div>
+        <div class="box" style="grid-template-columns:auto 1fr;align-items:center;gap:14px">
+          <div class="switch"><input type="checkbox" id="optConductor" checked><span></span></div>
+          <div class="grid2" style="align-items:center">
+            <label for="optConductor" style="font-weight:700;cursor:pointer">Include a conductor<span class="hint" style="display:block;font-weight:400">Shows the conductor in front of the choir and on the sign-off sheet.</span></label>
+            <div class="field" id="condNameWrap"><label for="condName">Conductor's name (optional)</label><input type="text" id="condName" placeholder="e.g. Ms. Reyes"></div>
+          </div>
+        </div>
+        <div class="row" style="justify-content:space-between"><h3>Preview</h3><span class="hint" id="previewName"></span></div>
+        <div class="plan-wrap" id="seatPreview"></div>
+        <p class="hint">Row 1 is closest to the audience. Seats are numbered left to right as the audience sees them.</p>
+      </section>
+
+      <!-- STEP 6 -->
+      <section class="pane" data-step="6" aria-labelledby="s6h">
+        <div class="sh"><div class="n">6</div><div><div class="of">Step 6 of 6</div><h2 id="s6h">Your arrangement is ready</h2><p>Review each performance. Click two singers on the seat plan to swap their seats. Then download the PDF.</p></div></div>
+        <div class="tiles" id="tiles"></div>
+        <div class="export">
+          <div class="row" style="justify-content:space-between">
+            <div><h3>Print-ready PDF</h3><p class="hint">Per performance: a landscape seat plan page, then a portrait sign-off form with acceptance and performance signatures.</p></div>
+            <div class="row">
+              <label class="sr" for="paper">Paper size</label>
+              <select id="paper" style="width:auto"><option value="a4">A4</option><option value="letter">Letter (short bond)</option><option value="legal">Legal (long bond)</option></select>
+              <button class="btn primary big" id="dlPdf" type="button">⤓ Download PDF</button>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn" id="shuffle" type="button">↻ Reshuffle lineup</button>
+            <button class="btn" id="dlPng" type="button">Seat plan image</button>
+            <button class="btn" id="dlCsv" type="button">Spreadsheet (CSV)</button>
+            <button class="btn" id="copyText" type="button">Copy for group chat</button>
+          </div>
+          <div class="copybox" id="copyBox"><p class="hint">Copying was blocked. The text is selected below. Press Ctrl+C (⌘C on Mac).</p><textarea id="copyArea" readonly></textarea></div>
+        </div>
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div id="perfView"></div>
+      </section>
+
+      <div class="nav">
+        <button class="btn" id="backBtn" type="button">← Back</button>
+        <p class="hint" id="navHint"></p>
+        <button class="btn primary" id="nextBtn" type="button">Next →</button>
+      </div>
+    </main>
+  </section>
+
+  <section class="wrap">
+    <footer class="foot">
+      <p><strong>Disclaimer · Zero data retention.</strong> Choir Arranger runs entirely in your browser. Member names, voice parts, instruments, availability and schedules are held only in this page's memory while it is open. They are not uploaded, logged, saved in cookies, local storage or any database, and not shared with anyone. Files you upload are read on your device and never leave it. Files you download (PDF, image, CSV) are saved only to your own device. When you refresh or close this tab, your choir data is permanently erased and can't be recovered.</p>
+      <p>Nothing you enter is stored by this site. Lineups and seat plans are suggestions based on the rules you set; please review them before sharing with your group.</p>
+      <p class="copy" hidden style="display:none!important">© <span id="cy">2026</span> Choir Arranger. All rights reserved.</p>
+    </footer>
+  </section>
+</div>
+<div class="pop" id="availPop" role="menu" aria-label="Set availability" hidden>
+  <button type="button" role="menuitem" data-v=""><span class="ok">✓</span>Available</button>
+  <button type="button" role="menuitem" data-v="x"><span class="no">✕</span>Can't come</button>
+  <button type="button" role="menuitem" data-v="p"><span class="must">★</span>Must include</button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+  const SECS = ["S", "A", "T", "B"];
+  const SEC_NAME = { S: "Soprano", A: "Alto", T: "Tenor", B: "Bass" };
+  const COL = { S: "#c43d6e", A: "#b8740b", T: "#2b8a57", B: "#3a63c4", M: "#6b4fbb" };
+  const SOFT = { S: "#fbe5ee", A: "#fbefd9", T: "#def2e6", B: "#e2eafa", M: "#ece6fa" };
+  const STEPS = ["Singers", "Musicians", "Performances", "Availability", "Seating", "Arrangement"];
+  const VOICE_OPTIONS = [["S","S"],["S","S1"],["S","S2"],["A","A"],["A","A1"],["A","A2"],["A","Mezzo"],["A","CT"],["T","T"],["T","T1"],["T","T2"],["B","B"],["B","B1"],["B","B2"],["B","Bar"]];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let uid = 1;
+  const newId = () => "id" + (uid++);
+  const state = {
+    view: "home", step: 1, group: "", facilitator: "",
+    singers: [], musicians: [], perfs: [], avail: {}, swaps: {},
+    opts: { repeat: true, max: "", dupNames: false, fill: true, sub: true, split: "prop" },
+    seat: { layout: "split", rows: "auto", side: "left", conductor: true, condName: "" },
+    seed: 7311, plan: [], usage: {}, tab: 0, selSeat: null, isExample: false
+  };
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const instKey = (s) => String(s || "").trim().toLowerCase();
+  const titleCase = (s) => String(s).trim().replace(/\s+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  let toastT;
+  function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("show"), 2600); }
+  function setMsg(id, text, ok) { const el = $(id); el.textContent = text; el.classList.toggle("ok", !!ok); }
+
+  // ---------- parsing ----------
+  function parseVoice(tok) {
+    const t = String(tok || "").trim().toUpperCase().replace(/[\s.]+/g, "");
+    let m;
+    if (!t) return null;
+    if ((m = t.match(/^(S|SOP|SOPRANO)([12])?$/))) return { sec: "S", sub: m[2] ? "S" + m[2] : "S" };
+    if ((m = t.match(/^(A|ALT|ALTO)([12])?$/))) return { sec: "A", sub: m[2] ? "A" + m[2] : "A" };
+    if ((m = t.match(/^(T|TEN|TENOR)([12])?$/))) return { sec: "T", sub: m[2] ? "T" + m[2] : "T" };
+    if ((m = t.match(/^(B|BAS|BASS)([12])?$/))) return { sec: "B", sub: m[2] ? "B" + m[2] : "B" };
+    if (/^(MS|MEZ|MEZZO|MEZZOSOPRANO)$/.test(t)) return { sec: "A", sub: "Mezzo" };
+    if (/^(C|CONTRALTO)$/.test(t)) return { sec: "A", sub: "A" };
+    if (/^(CT|COUNTERTENOR)$/.test(t)) return { sec: "A", sub: "CT" };
+    if (/^(BAR|BARI|BARITONE)$/.test(t)) return { sec: "B", sub: "Bar" };
+    return null;
+  }
+  const splitFields = (raw) => raw.split(/\t|,|;|\||\s+[-–—]\s+/).map(s => s.trim().replace(/^"|"$/g, "")).filter(Boolean);
+  function parseSinger(line) {
+    const raw = line.trim();
+    if (!raw || raw.startsWith("#")) return { skip: true };
+    let parts = splitFields(raw);
+    if (parts.length === 1) { const m = raw.match(/^(.*\S)\s+(\S+)$/); if (m && parseVoice(m[2])) parts = [m[1], m[2]]; }
+    let vi = -1, v = null;
+    for (let i = parts.length - 1; i >= 0; i--) { const x = parseVoice(parts[i]); if (x) { vi = i; v = x; break; } }
+    if (!v) return /name|voice|part/i.test(raw) ? { skip: true } : { error: raw };
+    const name = parts.filter((_, i) => i !== vi).join(" ").trim();
+    return name ? { name, ...v } : { error: raw };
+  }
+  function parseMusician(line) {
+    const raw = line.trim();
+    if (!raw || raw.startsWith("#")) return { skip: true };
+    let parts = splitFields(raw);
+    if (parts.length === 1) { const m = raw.match(/^(.*\S)\s+(\S+)$/); if (!m) return { error: raw }; parts = [m[1], m[2]]; }
+    if (/^name$/i.test(parts[0]) && /instrument/i.test(parts[1] || "")) return { skip: true };
+    const inst = parts[parts.length - 1], name = parts.slice(0, -1).join(" ");
+    return name && inst ? { name, inst: titleCase(inst) } : { error: raw };
+  }
+  function clearExampleIfNeeded() {
+    if (!state.isExample) return;
+    state.singers = []; state.musicians = []; state.avail = {}; state.swaps = {}; state.isExample = false;
+    toast("Example names removed. Your list starts here.");
+  }
+  const nameTaken = (name) => [...state.singers, ...state.musicians].some(m => m.name.toLowerCase() === name.toLowerCase());
+  function addPeople(kind, text) {
+    if (text.trim()) clearExampleIfNeeded();
+    const list = kind === "s" ? state.singers : state.musicians;
+    let added = 0; const errors = [], dups = [];
+    for (const line of text.split(/\r?\n/)) {
+      const r = kind === "s" ? parseSinger(line) : parseMusician(line);
+      if (r.skip) continue;
+      if (r.error) { errors.push(r.error); continue; }
+      if (nameTaken(r.name) && !state.opts.dupNames) { dups.push(r.name); continue; }
+      list.push(kind === "s" ? { id: newId(), name: r.name, sec: r.sec, sub: r.sub } : { id: newId(), name: r.name, inst: r.inst });
+      added++;
+    }
+    const out = []; const noun = kind === "s" ? "singer" : "musician";
+    if (added) out.push(`Added ${added} ${noun}${added === 1 ? "" : "s"}.`);
+    if (dups.length) out.push(`Skipped ${dups.length} name${dups.length === 1 ? "" : "s"} already on the list: ${dups.slice(0, 5).join(", ")}${dups.length > 5 ? "…" : ""}. (Turn on "Allow repeated names" in Step 4 to keep them.)`);
+    if (errors.length) out.push(kind === "s" ? `Couldn't find a voice part on: "${errors.slice(0, 3).join('", "')}"${errors.length > 3 ? "…" : ""}. Add one like S1 or T.` : `Couldn't read: "${errors.slice(0, 3).join('", "')}". Use Name, Instrument.`);
+    if (!out.length) out.push(`Nothing to add yet. Type one ${noun} per line.`);
+    setMsg(kind === "s" ? "singerMsg" : "musicianMsg", out.join(" "), added > 0 && !dups.length && !errors.length);
+    if (kind === "m") syncPerfInstruments();
+    refresh();
+    return added;
+  }
+  function addOne(kind, name, extra) {
+    const msgId = kind === "s" ? "singerMsg" : "musicianMsg";
+    name = name.trim().replace(/\s+/g, " ");
+    if (!name) { setMsg(msgId, "Please type a name first."); return false; }
+    if (!extra) { setMsg(msgId, kind === "s" ? "Please choose a voice part." : "Please type an instrument."); return false; }
+    clearExampleIfNeeded();
+    if (nameTaken(name) && !state.opts.dupNames) { setMsg(msgId, `${name} is already on the list. Turn on "Allow repeated names" in Step 4 if this is a different person.`); return false; }
+    if (kind === "s") { const [sec, sub] = extra.split("|"); state.singers.push({ id: newId(), name, sec, sub }); }
+    else { state.musicians.push({ id: newId(), name, inst: titleCase(extra) }); syncPerfInstruments(); }
+    setMsg(msgId, `Added ${name}.`, true);
+    refresh();
+    return true;
+  }
+  function syncPerfInstruments() {
+    const keys = [...new Set(state.musicians.map(m => instKey(m.inst)))];
+    state.perfs.forEach(p => keys.forEach(k => { if (!(k in p.inst)) p.inst[k] = 1; }));
+  }
+  function instLabel(k) { const m = state.musicians.find(x => instKey(x.inst) === k); return m ? m.inst : titleCase(k); }
+
+  // ---------- arranging ----------
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function sectionTargets(p) {
+    if (p.useCustom) { const t = {}; SECS.forEach(s => t[s] = Math.max(0, parseInt(p.custom[s], 10) || 0)); return { t, custom: true }; }
+    const cap = Math.max(0, parseInt(p.cap, 10) || 0);
+    const w = {}; SECS.forEach(s => { const n = state.singers.filter(m => m.sec === s).length; w[s] = n ? (state.opts.split === "equal" ? 1 : n) : 0; });
+    const total = SECS.reduce((a, s) => a + w[s], 0);
+    const t = {}; SECS.forEach(s => t[s] = 0);
+    if (!total) return { t, custom: false };
+    const rem = []; let used = 0;
+    SECS.forEach(s => { const e = cap * w[s] / total; t[s] = Math.floor(e); used += t[s]; rem.push([s, e - t[s]]); });
+    rem.sort((a, b) => b[1] - a[1]);
+    for (let i = 0; used < cap && i < 40; i++) { const s = rem[i % 4][0]; if (w[s]) { t[s]++; used++; } }
+    return { t, custom: false };
+  }
+  function perfOrder() {
+    return state.perfs.map((p, i) => ({ p, i })).sort((a, b) => {
+      const ka = (a.p.date || "9999") + (a.p.time || "99"), kb = (b.p.date || "9999") + (b.p.time || "99");
+      return ka < kb ? -1 : ka > kb ? 1 : a.i - b.i;
+    }).map(x => x.p);
+  }
+  function arrange() {
+    const rng = mulberry32(state.seed);
+    const people = [...state.singers, ...state.musicians];
+    const usage = {}; people.forEach(m => usage[m.id] = 0);
+    const max = parseInt(state.opts.max, 10);
+    const plan = [];
+    for (const p of perfOrder()) {
+      const rand = {}; people.forEach(m => rand[m.id] = rng());
+      const av = (m) => (state.avail[m.id] || {})[p.id] || "";
+      const taken = new Set(); const notes = [];
+      const eligible = (m) => !taken.has(m.id) && av(m) === "" && (state.opts.repeat ? (!max || usage[m.id] < max) : usage[m.id] === 0);
+      const cmp = (a, b) => (usage[a.id] - usage[b.id]) || (rand[a.id] - rand[b.id]);
+      const pinNote = (m) => {
+        if (!state.opts.repeat && usage[m.id] > 0) notes.push(`${m.name} is marked "must include" but already performed earlier.`);
+        else if (state.opts.repeat && max && usage[m.id] >= max) notes.push(`${m.name} is marked "must include" and goes over the limit of ${max}.`);
+      };
+      const { t: targets, custom } = sectionTargets(p);
+      const cap = custom ? SECS.reduce((a, s) => a + targets[s], 0) : Math.max(0, parseInt(p.cap, 10) || 0);
+      const lineup = { S: [], A: [], T: [], B: [] };
+      state.singers.filter(m => av(m) === "p").forEach(m => { lineup[m.sec].push({ m, pinned: true }); taken.add(m.id); pinNote(m); });
+      const shortBy = {};
+      for (const s of SECS) {
+        let need = targets[s] - lineup[s].length;
+        const pool = state.singers.filter(m => m.sec === s && eligible(m)).sort(cmp);
+        while (need > 0 && pool.length) {
+          let idx = 0;
+          if (state.opts.sub) {
+            const subs = [...new Set(pool.map(m => m.sub))];
+            const cnt = (sub) => lineup[s].filter(x => x.m.sub === sub).length;
+            subs.sort((a, b) => (cnt(a) - cnt(b)) || (usage[pool.find(m => m.sub === a).id] - usage[pool.find(m => m.sub === b).id]) || (a < b ? -1 : 1));
+            idx = pool.findIndex(m => m.sub === subs[0]);
+          }
+          const m = pool.splice(idx, 1)[0]; lineup[s].push({ m }); taken.add(m.id); need--;
+        }
+        if (need > 0) shortBy[s] = need;
+      }
+      const short = Object.values(shortBy).reduce((a, b) => a + b, 0);
+      const shortTxt = Object.entries(shortBy).map(([s, n]) => `${SEC_NAME[s]} ${n}`).join(", ");
+      if (short && state.opts.fill) {
+        const extras = state.singers.filter(eligible).sort(cmp).slice(0, short);
+        extras.forEach(m => { lineup[m.sec].push({ m, extra: true }); taken.add(m.id); });
+        if (extras.length) notes.push(`Not enough in ${shortTxt}. Added ${extras.length} singer${extras.length === 1 ? "" : "s"} from other sections (marked +).`);
+        if (extras.length < short) notes.push(`${short - extras.length} spot${short - extras.length === 1 ? " is" : "s are"} still empty because no one else is available.`);
+      } else if (short) notes.push(`Not enough available singers: ${shortTxt} short.`);
+      SECS.forEach(s => lineup[s].sort((a, b) => (a.m.sub < b.m.sub ? -1 : a.m.sub > b.m.sub ? 1 : a.m.name.localeCompare(b.m.name))));
+      const band = [];
+      state.musicians.filter(m => av(m) === "p").forEach(m => { band.push({ m, pinned: true }); taken.add(m.id); pinNote(m); });
+      Object.entries(p.inst).forEach(([k, c]) => {
+        c = parseInt(c, 10) || 0;
+        let need = c - band.filter(x => instKey(x.m.inst) === k).length;
+        const pool = state.musicians.filter(m => instKey(m.inst) === k && eligible(m)).sort(cmp);
+        while (need > 0 && pool.length) { const m = pool.shift(); band.push({ m }); taken.add(m.id); need--; }
+        if (need > 0) notes.push(`Need ${need} more on ${instLabel(k)}: no one else is available.`);
+      });
+      band.sort((a, b) => a.m.inst.localeCompare(b.m.inst) || a.m.name.localeCompare(b.m.name));
+      for (const id of taken) usage[id]++;
+      const filled = SECS.reduce((a, s) => a + lineup[s].length, 0);
+      plan.push({ p, lineup, targets, cap, filled, band, notes });
+    }
+    state.plan = plan; state.usage = usage;
+    plan.forEach(e => e.seats = seatLayout(e));
+  }
+
+  // ---------- seat layout ----------
+  function seatLayout(e) {
+    const L = e.lineup; const n = SECS.reduce((a, s) => a + L[s].length, 0);
+    let R = state.seat.rows === "auto" ? Math.min(5, Math.max(1, Math.ceil(n / 10))) : parseInt(state.seat.rows, 10);
+    R = Math.max(1, Math.min(R, n || 1));
+    const grid = []; let W = 0;
+    const put = (r, c, x) => { (grid[r] = grid[r] || [])[c] = x; };
+    const block = (list, rows, r0, c0) => { list.forEach((x, i) => put(r0 + (i % rows), c0 + Math.floor(i / rows), x)); return Math.ceil(list.length / rows); };
+    let layout = state.seat.layout;
+    if (layout === "split" && R < 2) layout = "blocks";
+    if (layout === "blocks") { let c = 0; SECS.forEach(s => { if (L[s].length) c += block(L[s], R, 0, c); }); W = c; }
+    else if (layout === "split") {
+      const F = Math.ceil(R / 2), Bk = R - F;
+      const wf = Math.ceil(L.S.length / F) + Math.ceil(L.A.length / F);
+      const wb = Math.ceil(L.T.length / Bk) + Math.ceil(L.B.length / Bk);
+      W = Math.max(wf, wb);
+      let c = Math.floor((W - wf) / 2); c += block(L.S, F, 0, c); block(L.A, F, 0, c);
+      c = Math.floor((W - wb) / 2); c += block(L.T, Bk, F, c); block(L.B, Bk, F, c);
+    } else {
+      const q = SECS.map(s => [...L[s]]); const seq = [];
+      while (q.some(a => a.length)) q.forEach(a => { if (a.length) seq.push(a.shift()); });
+      W = Math.ceil(seq.length / R);
+      seq.forEach((x, i) => put(Math.floor(i / W), i % W, x));
+    }
+    for (let r = 0; r < R; r++) grid[r] = grid[r] || [];
+    (state.swaps[e.p.id] || []).forEach(([a, b]) => {
+      let pa, pb;
+      grid.forEach((row, r) => row.forEach((x, c) => { if (x && x.m.id === a) pa = [r, c]; if (x && x.m.id === b) pb = [r, c]; }));
+      if (pa && pb) { const t = grid[pa[0]][pa[1]]; grid[pa[0]][pa[1]] = grid[pb[0]][pb[1]]; grid[pb[0]][pb[1]] = t; }
+    });
+    const code = {};
+    grid.forEach((row, r) => { let k = 0; for (let c = 0; c < W; c++) if (row[c]) { k++; code[row[c].m.id] = `Row ${r + 1}, Seat ${k}`; } });
+    return { grid, W: Math.max(W, 1), R, code };
+  }
+
+  function seatSVG(e, interactive) {
+    const { grid, W, R } = e.seats;
+    const pitch = 56, rowGap = 82, maxSpan = 1.25;
+    const r0 = Math.max(340, pitch * (W - 1) / maxSpan);
+    const step = W > 1 ? pitch / r0 : 0;
+    const ang = (c) => (c - (W - 1) / 2) * step;
+    const edge = (W - 1) / 2 * step;
+    const pts = []; let i = 0;
+    grid.forEach((row, r) => { for (let c = 0; c < W; c++) { const x = row[c]; if (!x) continue; const rad = r0 + r * rowGap, a = ang(c); pts.push({ x: rad * Math.sin(a), y: -rad * Math.cos(a), it: x, r, i: i++ }); } });
+    const side = state.seat.side === "right" ? 1 : -1;
+    const fx = r0 * Math.sin(edge), fy = -r0 * Math.cos(edge);
+    const mpts = e.band.map((x, k) => ({ x: side * (fx + 82 + (k % 2) * 60), y: fy - 30 + Math.floor(k / 2) * 78, it: x, i: i++ }));
+    const all = pts.concat(mpts);
+    const xs = all.map(p => p.x), ys = all.map(p => p.y);
+    const backRad = r0 + (R - 1) * rowGap;
+    const arcEndX = backRad * Math.sin(edge + step * 0.7);
+    const minX = Math.min(-200, -arcEndX, ...xs) - 80, maxX = Math.max(200, arcEndX, ...xs) + 80;
+    const minY = Math.min(-backRad, ...ys) - 40;
+    const bottom = Math.max(-r0 + 40, ...ys.map(y => y + 48));
+    const cond = state.seat.conductor;
+    const cY = bottom + 22, aY = bottom + (cond ? 62 : 14), maxY = aY + 38;
+    const initials = (n) => n.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+    const short = (n) => { const w = n.split(/\s+/).filter(Boolean); const s = w.length > 1 ? `${w[0]} ${w[w.length - 1][0]}.` : w[0] || ""; return s.length > 12 ? s.slice(0, 11) + "…" : s; };
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Seat plan for ${esc(e.p.name)}">`;
+    s += `<rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}" fill="#ffffff"/>`;
+    for (let r = 0; r < R; r++) {
+      const rad = r0 + r * rowGap, a1 = -(edge + step * 0.7), a2 = edge + step * 0.7;
+      const p1 = [rad * Math.sin(a1), -rad * Math.cos(a1)], p2 = [rad * Math.sin(a2), -rad * Math.cos(a2)];
+      s += `<path d="M${p1[0].toFixed(1)} ${p1[1].toFixed(1)} A${rad} ${rad} 0 0 1 ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}" fill="none" stroke="#e3e8f1" stroke-width="44" stroke-linecap="round"/>`;
+      const lp = side < 0 ? p2 : p1;
+      s += `<text x="${(lp[0] + (side < 0 ? 30 : -30)).toFixed(1)}" y="${(lp[1] + 4).toFixed(1)}" text-anchor="${side < 0 ? "start" : "end"}" font-size="11" font-weight="700" fill="#8a93a8">Row ${r + 1}</text>`;
+    }
+    if (cond) s += `<circle cx="0" cy="${cY}" r="13" fill="#172036"/><text x="0" y="${cY + 4.5}" text-anchor="middle" font-size="12" fill="#fff">♪</text><text x="0" y="${cY + 28}" text-anchor="middle" font-size="11" font-weight="700" fill="#5b6680">${esc(state.seat.condName ? "Conductor · " + state.seat.condName : "Conductor")}</text>`;
+    s += `<rect x="${minX + 20}" y="${aY}" width="${maxX - minX - 40}" height="28" rx="8" fill="#eef2f8"/><text x="0" y="${aY + 18.5}" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="3" fill="#5b6680">AUDIENCE</text>`;
+    const seatG = (p, ck, label, sub, num, mid, isBand) => {
+      const sel = interactive && state.selSeat === mid ? " sel" : "";
+      return `<g class="seat${sel}" ${interactive && !isBand ? `data-seat="${mid}" tabindex="0" role="button" aria-label="${esc(label)}, ${esc(sub)}, ${esc(num)}"` : ""} style="--i:${p.i}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">`
+        + (isBand ? `<rect x="-20" y="-20" width="40" height="40" rx="9" fill="${SOFT[ck]}" stroke="${COL[ck]}" stroke-width="2"/>` : `<circle r="20" fill="${SOFT[ck]}" stroke="${COL[ck]}" stroke-width="2"/>`)
+        + `<text y="4.5" text-anchor="middle" font-size="13" font-weight="700" fill="${COL[ck]}">${esc(isBand ? "♪" : initials(label))}</text>`
+        + `<text y="-24" text-anchor="middle" font-size="8.5" fill="#8a93a8">${esc(num)}</text>`
+        + `<text y="32" text-anchor="middle" font-size="9.5" font-weight="600" fill="#172036">${esc(short(label))}</text>`
+        + `<text y="42" text-anchor="middle" font-size="8" fill="${COL[ck]}">${esc(sub)}</text><title>${esc(label)} · ${esc(sub)}</title></g>`;
+    };
+    pts.forEach(p => { const c = e.seats.code[p.it.m.id] || ""; s += seatG(p, p.it.m.sec, p.it.m.name, p.it.m.sub, c.replace("Row ", "R").replace(", Seat ", "-"), p.it.m.id, false); });
+    mpts.forEach(p => { s += seatG(p, "M", p.it.m.name, p.it.m.inst, "", p.it.m.id, true); });
+    if (!pts.length) s += `<text x="0" y="${-r0}" text-anchor="middle" font-size="14" fill="#8a93a8">No singers assigned yet</text>`;
+    return s + `</svg>`;
+  }
+
+  // ---------- formatting ----------
+  function fmtWhen(p) {
+    let out = "";
+    if (p.date) { const d = new Date(p.date + "T00:00:00"); if (!isNaN(d)) out = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }); }
+    if (p.time) { const [h, mi] = p.time.split(":").map(Number); out += (out ? " · " : "") + new Date(2000, 0, 1, h, mi).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+    return out || "Date not set";
+  }
+  const shortDate = (p) => { if (!p.date) return ""; const d = new Date(p.date + "T00:00:00"); return isNaN(d) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+
+  // ---------- views ----------
+  function showHome() {
+    state.view = "home";
+    $("home").hidden = false; $("wizard").hidden = true; $("stepsRow").hidden = true; $("progress").hidden = true;
+    $("topStart").hidden = false; $("resetAll").hidden = true;
+    window.scrollTo({ top: 0 });
+  }
+  function startWizard(step) {
+    state.view = "wiz";
+    $("home").hidden = true; $("wizard").hidden = false; $("stepsRow").hidden = false; $("progress").hidden = false;
+    $("topStart").hidden = true; $("resetAll").hidden = false;
+    go(step || state.step, true);
+  }
+  function renderStepper() {
+    $("stepper").innerHTML = STEPS.map((name, i) => {
+      const n = i + 1;
+      return `<button type="button" data-s="${n}" class="${n === state.step ? "on" : ""} ${n < state.step ? "done" : ""}" aria-current="${n === state.step ? "step" : "false"}"><b>${n < state.step ? "✓" : n}</b><span>${name}</span></button>`;
+    }).join("");
+    $("progressBar").style.width = ((state.step - 1) / (STEPS.length - 1) * 100) + "%";
+  }
+  function go(n, fresh) {
+    n = Math.max(1, Math.min(STEPS.length, n));
+    const back = !fresh && n < state.step;
+    state.step = n;
+    document.querySelectorAll(".pane").forEach(p => { const on = +p.dataset.step === n; p.classList.toggle("on", on); p.classList.toggle("back", on && back); });
+    renderStepper(); refresh();
+    $("backBtn").textContent = n === 1 ? "← Home" : "← Back";
+    $("nextBtn").hidden = n === STEPS.length;
+    $("nextBtn").textContent = n === STEPS.length - 1 ? "See arrangement →" : "Next →";
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  }
+  function navHint() {
+    const h = $("navHint"), s = state.step;
+    if (s === 1) h.textContent = state.singers.length ? `${state.singers.length} singer${state.singers.length === 1 ? "" : "s"} added` : "Add at least one singer to continue";
+    else if (s === 2) h.textContent = state.musicians.length ? `${state.musicians.length} musician${state.musicians.length === 1 ? "" : "s"} added` : "No musicians? Just press Next.";
+    else if (s === 3) h.textContent = state.perfs.length ? `${state.perfs.length} performance${state.perfs.length === 1 ? "" : "s"}` : "Add at least one performance";
+    else if (s === 4) h.textContent = "Optional. Everyone is available unless marked.";
+    else if (s === 5) h.textContent = "You can change this anytime.";
+    else h.textContent = "";
+    $("nextBtn").disabled = (s === 1 && !state.singers.length) || (s === 3 && !state.perfs.length);
+  }
+
+  function renderSingers() {
+    const c = {}; SECS.forEach(s => c[s] = state.singers.filter(m => m.sec === s).length);
+    $("singerCounts").innerHTML = state.singers.length ? SECS.map(s => `<span class="chip ${s}">${SEC_NAME[s]} ${c[s]}</span>`).join("") + (state.isExample ? `<span class="chip ex">Example data</span>` : "") : "";
+    const el = $("singerList");
+    if (!state.singers.length) { el.innerHTML = `<div class="empty">No singers yet. Add your first one above.</div>`; return; }
+    const rows = [...state.singers].sort((a, b) => SECS.indexOf(a.sec) - SECS.indexOf(b.sec) || (a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : 0) || a.name.localeCompare(b.name)).map(m =>
+      `<tr><td><input type="text" value="${esc(m.name)}" data-sname="${m.id}" aria-label="Name"></td><td><span class="chip ${m.sec}">${SEC_NAME[m.sec]}</span></td><td><select data-voice="${m.id}" aria-label="Voice part for ${esc(m.name)}">${VOICE_OPTIONS.map(([s, sub]) => `<option value="${s}|${sub}"${m.sec === s && m.sub === sub ? " selected" : ""}>${sub}</option>`).join("")}</select></td><td style="width:40px"><button type="button" class="del" data-sdel="${m.id}" aria-label="Remove ${esc(m.name)}">×</button></td></tr>`).join("");
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Section</th><th>Part</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  function renderMusicians() {
+    const by = {}; state.musicians.forEach(m => by[m.inst] = (by[m.inst] || 0) + 1);
+    $("musicianCounts").innerHTML = Object.entries(by).map(([k, v]) => `<span class="chip M">${esc(k)} ${v}</span>`).join("");
+    const el = $("musicianList");
+    if (!state.musicians.length) { el.innerHTML = `<div class="empty">No musicians yet. That's fine for a cappella groups.</div>`; return; }
+    el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Instrument</th><th></th></tr></thead><tbody>${state.musicians.map(m =>
+      `<tr><td><input type="text" value="${esc(m.name)}" data-mname="${m.id}" aria-label="Name"></td><td><input type="text" list="instList" value="${esc(m.inst)}" data-minst="${m.id}" aria-label="Instrument for ${esc(m.name)}" style="border-color:var(--line)"></td><td style="width:40px"><button type="button" class="del" data-mdel="${m.id}" aria-label="Remove ${esc(m.name)}">×</button></td></tr>`).join("")}</tbody></table></div>`;
+  }
+  function renderPerfs() {
+    const el = $("perfList");
+    if (!state.perfs.length) { el.innerHTML = `<div class="empty">No performances yet. Add your first one below.</div>`; return; }
+    const instKeys = [...new Set(state.musicians.map(m => instKey(m.inst)))];
+    el.innerHTML = state.perfs.map((p, i) => `
+      <div class="perf">
+        <div class="perf-top"><div class="row"><span class="perf-badge">${i + 1}</span><b>${esc(p.name || "New performance")}</b></div><button type="button" class="del" data-pdel="${p.id}" aria-label="Remove performance ${i + 1}" title="Remove">×</button></div>
+        <div class="perf-grid">
+          <div class="field wide"><label for="pn-${p.id}">Event name</label><input type="text" id="pn-${p.id}" data-pf="${p.id}|name" value="${esc(p.name)}" placeholder="e.g. Spring Concert"></div>
+          <div class="field"><label for="pd-${p.id}">Date</label><input type="date" id="pd-${p.id}" data-pf="${p.id}|date" value="${esc(p.date)}"></div>
+          <div class="field"><label for="pt-${p.id}">Call time</label><input type="time" id="pt-${p.id}" data-pf="${p.id}|time" value="${esc(p.time)}"></div>
+        </div>
+        <div class="perf-grid2">
+          <div class="field"><label for="pv-${p.id}">Venue</label><input type="text" id="pv-${p.id}" data-pf="${p.id}|venue" value="${esc(p.venue)}" placeholder="e.g. City Hall Auditorium"></div>
+          <div class="field"><label for="pc-${p.id}">Singers needed</label><input type="number" min="0" id="pc-${p.id}" data-pf="${p.id}|cap" value="${esc(p.cap)}" placeholder="e.g. 16" ${p.useCustom ? "disabled" : ""}></div>
+        </div>
+        <label class="toggle-line"><input type="checkbox" data-pcustom="${p.id}" ${p.useCustom ? "checked" : ""}> Set exact numbers per section</label>
+        ${p.useCustom
+          ? `<div class="split">${SECS.map(s => `<label for="ps-${s}-${p.id}" style="color:${COL[s]}">${SEC_NAME[s]}<input type="number" min="0" id="ps-${s}-${p.id}" data-pf="${p.id}|custom.${s}" value="${esc(p.custom[s])}"></label>`).join("")}<span class="auto-note" id="auto-${p.id}"></span></div>`
+          : `<p class="auto-note" id="auto-${p.id}"></p>`}
+        ${instKeys.length ? `<div class="field"><span class="lbl">Musicians needed</span><div class="inst-row">${instKeys.map(k => `<span class="inst-item">${esc(instLabel(k))}<span class="stepper-num"><button type="button" data-inst="${p.id}|${k}|-1" aria-label="Fewer ${esc(instLabel(k))}">−</button><span>${p.inst[k] || 0}</span><button type="button" data-inst="${p.id}|${k}|1" aria-label="More ${esc(instLabel(k))}">+</button></span></span>`).join("")}</div></div>` : ""}
+      </div>`).join("");
+    updateAutoNotes();
+  }
+  function updateAutoNotes() {
+    state.perfs.forEach(p => {
+      const el = $("auto-" + p.id); if (!el) return;
+      const { t } = sectionTargets(p);
+      el.textContent = p.useCustom ? `Total: ${SECS.reduce((a, s) => a + t[s], 0)} singers` : (parseInt(p.cap, 10) ? `Automatic split → ${SECS.map(s => `${SEC_NAME[s]} ${t[s]}`).join(" · ")}` : "Enter how many singers you need.");
+    });
+  }
+  function renderAvail() {
+    const el = $("availGrid");
+    if (!state.perfs.length || !(state.singers.length + state.musicians.length)) { el.innerHTML = `<div class="empty">Add people and performances first.</div>`; return; }
+    const perfs = perfOrder();
+    const head = `<thead><tr><th>Name</th><th>Part</th>${perfs.map(p => `<th class="pcol">${esc(p.name || "Untitled")}<span>${esc(shortDate(p))}</span></th>`).join("")}<th style="text-align:center">Times picked</th></tr></thead>`;
+    const row = (m, part) => `<tr><td>${esc(m.name)}</td><td>${part}</td>${perfs.map(p => {
+      const v = (state.avail[m.id] || {})[p.id] || "";
+      const lbl = v === "x" ? "can't come" : v === "p" ? "must include" : "available";
+      return `<td class="c"><button type="button" class="cellbtn ${v}" data-cell="${m.id}|${p.id}" aria-label="${esc(m.name)} at ${esc(p.name)}: ${lbl}" title="${lbl}">${v === "x" ? "✕" : v === "p" ? "★" : "✓"}</button></td>`;
+    }).join("")}<td style="text-align:center;font-variant-numeric:tabular-nums">${state.usage[m.id] || 0}</td></tr>`;
+    const singers = [...state.singers].sort((a, b) => SECS.indexOf(a.sec) - SECS.indexOf(b.sec) || a.name.localeCompare(b.name));
+    let body = `<tr class="group"><td colspan="${perfs.length + 3}">Singers</td></tr>` + singers.map(m => row(m, `<span class="chip ${m.sec}">${esc(m.sub)}</span>`)).join("");
+    if (state.musicians.length) body += `<tr class="group"><td colspan="${perfs.length + 3}">Musicians</td></tr>` + state.musicians.map(m => row(m, `<span class="chip M">${esc(m.inst)}</span>`)).join("");
+    el.innerHTML = `<div class="table-wrap"><table>${head}<tbody>${body}</tbody></table></div>`;
+  }
+  function renderPreview() {
+    const e = state.plan[0];
+    $("previewName").textContent = e ? `Showing: ${e.p.name || "first performance"}` : "";
+    $("seatPreview").innerHTML = e && e.filled ? seatSVG(e, false) : `<div class="empty">Add singers and a performance to preview the seat plan.</div>`;
+    document.querySelectorAll('input[name=layout]').forEach(r => r.checked = r.value === state.seat.layout);
+  }
+  function renderResults() {
+    const plan = state.plan;
+    const seats = plan.reduce((a, x) => a + x.cap, 0), filled = plan.reduce((a, x) => a + x.filled, 0);
+    const people = state.singers.length + state.musicians.length;
+    const unused = [...state.singers, ...state.musicians].filter(m => !state.usage[m.id]).length;
+    $("tiles").innerHTML = `
+      <div class="tile"><b>${plan.length}</b><span>performance${plan.length === 1 ? "" : "s"}</span></div>
+      <div class="tile ${filled >= seats ? "good" : "warn"}"><b>${filled}/${seats}</b><span>singer spots filled</span></div>
+      <div class="tile"><b>${people}</b><span>people on your lists</span></div>
+      <div class="tile"><b>${unused}</b><span>not scheduled yet</span></div>`;
+    if (!plan.length) { $("tabs").innerHTML = ""; $("perfView").innerHTML = `<div class="empty">Add a performance in Step 3 to see the arrangement.</div>`; return; }
+    if (state.tab >= plan.length) state.tab = 0;
+    $("tabs").innerHTML = plan.map((e, i) => `<button type="button" role="tab" class="tab ${i === state.tab ? "on" : ""}" aria-selected="${i === state.tab}" data-tab="${i}">${e.notes.length ? '<span class="warnDot" title="Needs attention"></span>' : ""}${esc(e.p.name || "Untitled")}<small>${esc(shortDate(e.p))}</small></button>`).join("");
+    const e = plan[state.tab];
+    const sec = (s) => `<div class="sec ${s}"><div class="sec-title">${SEC_NAME[s]}<span>${e.lineup[s].length}/${e.targets[s]}</span></div><ul>${e.lineup[s].length ? e.lineup[s].map(x => `<li><span>${x.pinned ? "★ " : ""}${x.extra ? "+ " : ""}${esc(x.m.name)}</span><small>${esc(x.m.sub)}</small></li>`).join("") : `<li class="none">${e.targets[s] ? "No one available" : "None needed"}</li>`}</ul></div>`;
+    const band = `<div class="sec M"><div class="sec-title">Musicians<span>${e.band.length}</span></div><ul>${e.band.length ? e.band.map(x => `<li><span>${x.pinned ? "★ " : ""}${esc(x.m.name)}</span><small>${esc(x.m.inst)}</small></li>`).join("") : `<li class="none">None</li>`}</ul></div>`;
+    $("perfView").innerHTML = `<div class="perf-view">
+      <div class="pv-head"><div><h3>${esc(e.p.name || "Untitled performance")}</h3><div class="when">${esc(fmtWhen(e.p))}${e.p.venue ? " · " + esc(e.p.venue) : ""}</div></div><span class="fill ${e.filled >= e.cap ? "full" : "short"}">${e.filled} / ${e.cap} singers${e.band.length ? ` + ${e.band.length} musician${e.band.length === 1 ? "" : "s"}` : ""}</span></div>
+      ${e.notes.length ? `<div class="notes">${e.notes.map(n => `<div>⚠ ${esc(n)}</div>`).join("")}</div>` : ""}
+      <div class="plan-wrap">${seatSVG(e, true)}</div>
+      <div class="row" style="justify-content:space-between"><p class="hint">${state.selSeat ? "Now click another singer to swap seats with them." : "Tip: click two singers to swap their seats."}</p>${(state.swaps[e.p.id] || []).length ? `<button class="btn ghost" type="button" id="undoSwaps">Reset seats</button>` : ""}</div>
+      <div class="sections">${SECS.map(sec).join("")}${band}</div>
+    </div>`;
+  }
+  function refresh() {
+    arrange();
+    if (state.view !== "wiz") return;
+    const s = state.step;
+    if (s === 1) renderSingers();
+    if (s === 2) renderMusicians();
+    if (s === 3) renderPerfs();
+    if (s === 4) renderAvail();
+    if (s === 5) renderPreview();
+    if (s === 6) renderResults();
+    navHint();
+  }
+
+  // ---------- capabilities ----------
+  let downloads = null, db = null, user = null, myId = null;
+  (async () => {
+    if (!(window.__host && window.__host.use)) return;
+    try { downloads = await window.__host.use("downloads"); } catch (e) {}
+    try { db = await window.__host.use("db"); user = await window.__host.use("user"); if (user) myId = await user.id(); } catch (e) { db = null; }
+  })();
+  async function save(filename, data) {
+    if (!downloads) { // standalone: plain browser download
+      try {
+        const blob = data instanceof Blob ? data : new Blob([data], { type: /\.csv$/.test(filename) ? "text/csv" : "application/octet-stream" });
+        const url = URL.createObjectURL(blob); const a = document.createElement("a");
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000); toast("Saved " + filename); return true;
+      } catch (e) { toast("Couldn't download right now."); return false; }
+    }
+    try { await downloads.save({ filename, data }); toast("Saved " + filename); return true; }
+    catch (err) {
+      const c = err && err.code;
+      toast(c === "declined" ? "Download cancelled." : c === "rate_limited" ? "A download is already waiting for your OK." : "Couldn't download right now. Try again in a moment.");
+      return false;
+    }
+  }
+
+  // ---------- exports ----------
+  const slug = (s) => (String(s || "choir").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "choir");
+  function svgToPng(svg, scale) {
+    return new Promise((resolve, reject) => {
+      const vb = svg.match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+      const w = Math.round(vb[2] * scale), h = Math.round(vb[3] * scale);
+      const url = URL.createObjectURL(new Blob([svg.replace("<svg ", `<svg width="${w}" height="${h}" `)], { type: "image/svg+xml" }));
+      const img = new Image();
+      img.onload = () => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url); resolve({ canvas: c, w, h }); };
+      img.onerror = (er) => { URL.revokeObjectURL(url); reject(er); };
+      img.src = url;
+    });
+  }
+  const rgb = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+  function pdfLogo(doc, x, y, s) { // s = size in mm, mirrors the site logo
+    const k = s / 48;
+    doc.setFillColor(23, 32, 54); doc.roundedRect(x, y, s, s, 13 * k, 13 * k, "F");
+    doc.setFillColor(150, 156, 172); [[8.5, 16], [24, 11], [39.5, 16]].forEach(([cx, cy]) => doc.circle(x + cx * k, y + cy * k, 3.2 * k, "F"));
+    [["#f0709c", 9.3, 29.5], ["#f2b84b", 18.2, 22], ["#4fc489", 29.8, 22], ["#6f97ee", 38.7, 29.5]].forEach(([c, cx, cy]) => { doc.setFillColor(...rgb(c)); doc.circle(x + cx * k, y + cy * k, 4.3 * k, "F"); });
+    doc.setFillColor(255, 255, 255); doc.circle(x + 24 * k, y + 38 * k, 2.8 * k, "F");
+  }
+  function pdfHeader(doc, PW, M, kind) {
+    doc.setFillColor(14, 124, 134); doc.rect(0, 0, PW, 2.5, "F");
+    pdfLogo(doc, M, 7, 11);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(13); doc.setTextColor(23, 32, 54);
+    doc.text("Choir", M + 14, 12.6);
+    doc.setTextColor(14, 124, 134); doc.text("Arranger", M + 14 + doc.getTextWidth("Choir "), 12.6);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 128, 145);
+    doc.text("Lineups · Seat plans · Sign-off sheets", M + 14, 16.6);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(23, 32, 54);
+    doc.text((state.group || "Choir").toUpperCase(), PW - M, 11.5, { align: "right" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 128, 145);
+    doc.text(kind, PW - M, 16, { align: "right" });
+    doc.setDrawColor(221, 227, 238); doc.setLineWidth(0.3); doc.line(M, 21, PW - M, 21);
+  }
+  function infoBox(doc, x, y, w, title, lines, color) {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+    const wrapped = lines.map(l => doc.splitTextToSize(l, w - 12));
+    const h = 9 + wrapped.reduce((a, l) => a + l.length * 3.9, 0) + 2;
+    doc.setFillColor(...color.bg); doc.setDrawColor(...color.line); doc.roundedRect(x, y, w, h, 2, 2, "FD");
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...color.ink); doc.text(title, x + 5, y + 6);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(60, 70, 92);
+    let yy = y + 11;
+    wrapped.forEach((l, i) => { doc.setFont("helvetica", "bold"); doc.text(`${i + 1}.`, x + 5, yy); doc.setFont("helvetica", "normal"); doc.text(l, x + 10, yy); yy += l.length * 3.9; });
+    return h;
+  }
+  async function buildPdf() {
+    if (!window.jspdf || !window.jspdf.jsPDF) { toast("The PDF tool didn't load. Check your connection and refresh."); return; }
+    if (!state.plan.length) { toast("Add a performance first."); return; }
+    const btn = $("dlPdf"); btn.disabled = true; btn.textContent = "Preparing…";
+    try {
+      const fmt = $("paper").value;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "mm", format: fmt, orientation: "portrait" });
+      const M = 14;
+      const teal = { bg: [223, 242, 243], line: [180, 222, 226], ink: [10, 93, 101] };
+      for (const e of state.plan) {
+        const when = [fmtWhen(e.p), e.p.venue].filter(Boolean).join("   ·   ");
+        // ---- seat plan page (landscape)
+        doc.addPage(fmt, "landscape");
+        let PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
+        pdfHeader(doc, PW, M, "Seat plan");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(17); doc.setTextColor(23, 32, 54);
+        doc.text(e.p.name || "Performance", M, 31);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(91, 102, 128);
+        doc.text(`${when}   ·   ${e.filled} singers${e.band.length ? `, ${e.band.length} musician${e.band.length === 1 ? "" : "s"}` : ""}`, M, 37);
+        const { canvas, w, h } = await svgToPng(seatSVG(e, false), 3);
+        const boxTop = 42, boxH = PH - boxTop - 34, boxW = PW - 2 * M;
+        const sc = Math.min((boxW - 6) / w, (boxH - 6) / h), iw = w * sc, ih = h * sc;
+        doc.setDrawColor(221, 227, 238); doc.roundedRect(M, boxTop, boxW, boxH, 3, 3, "S");
+        doc.addImage(canvas.toDataURL("image/png"), "PNG", M + (boxW - iw) / 2, boxTop + (boxH - ih) / 2, iw, ih);
+        // legend + how to read
+        let lx = M; const ly = PH - 25;
+        doc.setFontSize(8.5);
+        [["S", "Soprano"], ["A", "Alto"], ["T", "Tenor"], ["B", "Bass"], ["M", "Musician"]].forEach(([k, l]) => {
+          doc.setFillColor(...rgb(COL[k])); k === "M" ? doc.roundedRect(lx, ly - 2.6, 3.2, 3.2, .6, .6, "F") : doc.circle(lx + 1.6, ly - 1, 1.6, "F");
+          doc.setTextColor(60, 70, 92); doc.text(l, lx + 5, ly); lx += doc.getTextWidth(l) + 12;
+        });
+        doc.setTextColor(91, 102, 128);
+        doc.text("How to read: Row 1 is closest to the audience. Seats are numbered left to right as the audience sees them (R1-3 = Row 1, Seat 3). Find your name, then your seat.", M, ly + 6, { maxWidth: PW - 2 * M });
+
+        // ---- sign-off form (portrait)
+        doc.addPage(fmt, "portrait");
+        PW = doc.internal.pageSize.getWidth(); PH = doc.internal.pageSize.getHeight();
+        pdfHeader(doc, PW, M, "Sign-off sheet");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(23, 32, 54);
+        doc.text(e.p.name || "Performance", M, 31);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(91, 102, 128);
+        doc.text(when, M, 37);
+        const bh = infoBox(doc, M, 41, PW - 2 * M, "Hello! Please take a moment to:", [
+          "Find your name and check your voice part (or instrument) and seat. Tell the facilitator if anything is wrong.",
+          "Sign the Acceptance column to confirm you'll take part in this performance.",
+          "On performance day, sign the Performance column when you arrive.",
+          "Hand this sheet back to the facilitator. Thank you for sharing your gift of music!"
+        ], teal);
+        const rows = []; let n = 0;
+        if (state.seat.conductor && state.seat.condName) rows.push([++n, state.seat.condName, "Conductor", "Front, center", "", ""]);
+        SECS.forEach(s => e.lineup[s].forEach(x => rows.push([++n, x.m.name, `${SEC_NAME[s]} (${x.m.sub})`, e.seats.code[x.m.id] || "", "", ""])));
+        e.band.forEach(x => rows.push([++n, x.m.name, x.m.inst, `Musicians, ${state.seat.side}`, "", ""]));
+        const tableTop = 41 + bh + 5, roomH = PH - tableTop - 16 - 24;
+        const rowH = Math.max(7.5, Math.min(9, roomH / (rows.length + 1)));
+        doc.autoTable({
+          startY: tableTop, margin: { left: M, right: M, top: 26, bottom: 16 },
+          head: [["#", "Name", "Voice / Instrument", "Seat", "Acceptance (sign)", "Performance (sign)"]],
+          body: rows, theme: "grid",
+          styles: { font: "helvetica", fontSize: 9, cellPadding: 1.6, minCellHeight: rowH, valign: "middle", lineColor: [210, 216, 228], lineWidth: 0.2, textColor: [23, 32, 54] },
+          alternateRowStyles: { fillColor: [248, 250, 253] },
+          columnStyles: { 0: { cellWidth: 8, halign: "center" }, 2: { cellWidth: 36 }, 3: { cellWidth: 25 }, 4: { cellWidth: 37 }, 5: { cellWidth: 37 } },
+          headStyles: { fillColor: [23, 32, 54], textColor: 255, fontStyle: "bold", fontSize: 8.5, minCellHeight: 9, valign: "middle" },
+          didParseCell: (d) => { if (d.section === "body" && d.column.index === 2) { const s = SECS.find(k => String(d.cell.raw).startsWith(SEC_NAME[k])); d.cell.styles.textColor = d.cell.raw === "Conductor" ? [23, 32, 54] : rgb(s ? COL[s] : COL.M); d.cell.styles.fontStyle = "bold"; } },
+          didDrawPage: (d) => { if (d.pageNumber > 1) pdfHeader(doc, PW, M, `Sign-off sheet · ${e.p.name || "Performance"} (continued)`); }
+        });
+        let fy = doc.lastAutoTable.finalY + 15;
+        if (fy + 6 > PH - 14) { doc.addPage(fmt, "portrait"); pdfHeader(doc, PW, M, `Sign-off sheet · ${e.p.name || "Performance"} (continued)`); fy = 40; }
+        doc.setDrawColor(120, 128, 145); doc.setLineWidth(0.3);
+        const colW = (PW - 2 * M - 12) / 2;
+        doc.line(M, fy, M + colW, fy); doc.line(M + colW + 12, fy, PW - M, fy);
+        doc.setFontSize(8.5); doc.setTextColor(91, 102, 128);
+        doc.text(`Facilitator${state.facilitator ? ": " + state.facilitator : ""} (signature over printed name)`, M, fy + 4.5);
+        doc.text("Date", M + colW + 12, fy + 4.5);
+      }
+      doc.deletePage(1);
+      const total = doc.getNumberOfPages();
+      for (let i = 1; i <= total; i++) {
+        doc.setPage(i);
+        const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
+        doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(150, 157, 172);
+        doc.text(`© ${Math.max(2026, new Date().getFullYear())} Choir Arranger · Made for choir performances and worship services · No member data was stored online.`, M, PH - 8);
+        doc.text(`Page ${i} of ${total}`, PW - M, PH - 8, { align: "right" });
+      }
+      await save(`${slug(state.group)}-arrangement.pdf`, doc.output("blob"));
+    } catch (err) { console.error(err); toast("Something went wrong making the PDF."); }
+    finally { btn.disabled = false; btn.textContent = "⤓ Download PDF"; }
+  }
+  async function dlPng() {
+    const e = state.plan[state.tab]; if (!e) return;
+    const { canvas } = await svgToPng(seatSVG(e, false), 3);
+    canvas.toBlob(b => save(`seat-plan-${slug(e.p.name)}.png`, b), "image/png");
+  }
+  function csvText() {
+    const q = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const rows = [["Performance", "Date", "Time", "Venue", "Name", "Section", "Part / Instrument", "Seat"]];
+    state.plan.forEach(e => {
+      SECS.forEach(s => e.lineup[s].forEach(x => rows.push([e.p.name, e.p.date, e.p.time, e.p.venue, x.m.name, SEC_NAME[s], x.m.sub, e.seats.code[x.m.id] || ""])));
+      e.band.forEach(x => rows.push([e.p.name, e.p.date, e.p.time, e.p.venue, x.m.name, "Musician", x.m.inst, ""]));
+    });
+    return rows.map(r => r.map(q).join(",")).join("\n");
+  }
+  function chatText() {
+    return state.plan.map(e => {
+      const L = [`🎵 ${e.p.name || "Performance"}`, `${fmtWhen(e.p)}${e.p.venue ? " · " + e.p.venue : ""}`];
+      if (state.seat.conductor && state.seat.condName) L.push(`Conductor: ${state.seat.condName}`);
+      SECS.forEach(s => { if (e.lineup[s].length) L.push(`${SEC_NAME[s]}: ${e.lineup[s].map(x => x.m.name).join(", ")}`); });
+      if (e.band.length) L.push(`Musicians: ${e.band.map(x => `${x.m.name} (${x.m.inst})`).join(", ")}`);
+      return L.join("\n");
+    }).join("\n\n");
+  }
+
+  $("cy").textContent = Math.max(2026, new Date().getFullYear());
+  // ---------- events ----------
+  $("brand").addEventListener("click", showHome);
+  ["heroStart", "ctaStart", "topStart"].forEach(id => $(id).addEventListener("click", () => startWizard(state.step)));
+  ["heroExample", "topExample"].forEach(id => $(id).addEventListener("click", () => { loadExample(); startWizard(1); toast("Example loaded. Explore, then replace it with your own list."); }));
+  $("stepper").addEventListener("click", (e) => { const b = e.target.closest("[data-s]"); if (b) go(+b.dataset.s); });
+  $("backBtn").addEventListener("click", () => state.step === 1 ? showHome() : go(state.step - 1));
+  $("nextBtn").addEventListener("click", () => go(state.step + 1));
+  $("groupName").addEventListener("input", (e) => state.group = e.target.value);
+  $("facilitator").addEventListener("input", (e) => state.facilitator = e.target.value);
+
+  $("singerForm").addEventListener("submit", (e) => { e.preventDefault(); if (addOne("s", $("sName").value, $("sVoice").value)) { $("sName").value = ""; $("sName").focus(); } });
+  $("musicianForm").addEventListener("submit", (e) => { e.preventDefault(); if (addOne("m", $("mName").value, $("mInst").value.trim())) { $("mName").value = ""; $("mName").focus(); } });
+  $("addSingers").addEventListener("click", () => { if (addPeople("s", $("pasteSingers").value)) $("pasteSingers").value = ""; });
+  $("addMusicians").addEventListener("click", () => { if (addPeople("m", $("pasteMusicians").value)) $("pasteMusicians").value = ""; });
+  $("clearSingers").addEventListener("click", () => { state.singers.forEach(m => delete state.avail[m.id]); state.singers = []; setMsg("singerMsg", ""); state.isExample = false; refresh(); });
+  $("clearMusicians").addEventListener("click", () => { state.musicians.forEach(m => delete state.avail[m.id]); state.musicians = []; setMsg("musicianMsg", ""); refresh(); });
+  function bindFile(inputId, kind) {
+    $(inputId).addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      const msgId = kind === "s" ? "singerMsg" : "musicianMsg";
+      if (/\.xlsx?$/i.test(f.name)) { setMsg(msgId, "Excel files can't be read directly. In Excel choose File → Save As → CSV, then upload that file."); e.target.value = ""; return; }
+      const r = new FileReader();
+      r.onload = () => { addPeople(kind, String(r.result)); e.target.value = ""; };
+      r.onerror = () => setMsg(msgId, "Couldn't read that file. Save it as .csv or .txt and try again.");
+      r.readAsText(f);
+    });
+  }
+  bindFile("fileSingers", "s"); bindFile("fileMusicians", "m");
+
+  $("singerList").addEventListener("input", (e) => { const id = e.target.dataset.sname; if (id) state.singers.find(m => m.id === id).name = e.target.value; });
+  $("singerList").addEventListener("change", (e) => { const id = e.target.dataset.voice; if (id) { const m = state.singers.find(x => x.id === id); [m.sec, m.sub] = e.target.value.split("|"); refresh(); } });
+  $("singerList").addEventListener("click", (e) => { const d = e.target.closest("[data-sdel]"); if (d) { state.singers = state.singers.filter(m => m.id !== d.dataset.sdel); delete state.avail[d.dataset.sdel]; refresh(); } });
+  $("musicianList").addEventListener("input", (e) => {
+    const n = e.target.dataset.mname, i = e.target.dataset.minst;
+    if (n) state.musicians.find(m => m.id === n).name = e.target.value;
+    if (i) state.musicians.find(m => m.id === i).inst = e.target.value;
+  });
+  $("musicianList").addEventListener("change", (e) => { if (e.target.dataset.minst) { const m = state.musicians.find(x => x.id === e.target.dataset.minst); m.inst = titleCase(m.inst); syncPerfInstruments(); refresh(); } });
+  $("musicianList").addEventListener("click", (e) => { const d = e.target.closest("[data-mdel]"); if (d) { state.musicians = state.musicians.filter(m => m.id !== d.dataset.mdel); delete state.avail[d.dataset.mdel]; refresh(); } });
+
+  function newPerf() {
+    const last = state.perfs[state.perfs.length - 1];
+    const p = { id: newId(), name: "", date: "", time: last ? last.time : "", venue: last ? last.venue : "", cap: last ? last.cap : "", useCustom: false, custom: { S: "", A: "", T: "", B: "" }, inst: {} };
+    [...new Set(state.musicians.map(m => instKey(m.inst)))].forEach(k => p.inst[k] = 1);
+    return p;
+  }
+  $("addPerf").addEventListener("click", () => { const p = newPerf(); state.perfs.push(p); refresh(); const el = $("pn-" + p.id); if (el) el.focus(); });
+  $("perfList").addEventListener("input", (e) => {
+    const f = e.target.dataset.pf; if (!f) return;
+    const [id, key] = f.split("|"); const p = state.perfs.find(x => x.id === id);
+    if (key.startsWith("custom.")) p.custom[key.slice(7)] = e.target.value; else p[key] = e.target.value;
+    updateAutoNotes(); navHint();
+    if (key === "name") e.target.closest(".perf").querySelector(".perf-top b").textContent = p.name || "New performance";
+  });
+  $("perfList").addEventListener("change", (e) => {
+    const c = e.target.dataset.pcustom;
+    if (c) { const p = state.perfs.find(x => x.id === c); p.useCustom = e.target.checked; if (p.useCustom) { const { t } = sectionTargets({ ...p, useCustom: false }); SECS.forEach(s => { if (p.custom[s] === "") p.custom[s] = t[s]; }); } renderPerfs(); }
+  });
+  $("perfList").addEventListener("click", (e) => {
+    const d = e.target.closest("[data-pdel]");
+    if (d) { state.perfs = state.perfs.filter(p => p.id !== d.dataset.pdel); refresh(); return; }
+    const b = e.target.closest("[data-inst]");
+    if (b) { const [pid, k, delta] = b.dataset.inst.split("|"); const p = state.perfs.find(x => x.id === pid); p.inst[k] = Math.max(0, (p.inst[k] || 0) + Number(delta)); b.parentElement.querySelector("span").textContent = p.inst[k]; }
+  });
+  // availability: hover or tap a box, then pick an option
+  let popCell = null, popTimer;
+  const pop = $("availPop");
+  function openPop(cell, focusIt) {
+    clearTimeout(popTimer);
+    if (popCell && popCell !== cell) popCell.classList.remove("open");
+    popCell = cell; cell.classList.add("open");
+    const [mid, pid] = cell.dataset.cell.split("|");
+    const v = (state.avail[mid] || {})[pid] || "";
+    pop.querySelectorAll("button").forEach(b => b.classList.toggle("cur", b.dataset.v === v));
+    pop.hidden = false;
+    const r = cell.getBoundingClientRect(), pr = pop.getBoundingClientRect();
+    let x = Math.min(Math.max(8, r.left + r.width / 2 - pr.width / 2), innerWidth - pr.width - 8);
+    let y = r.bottom + 6; if (y + pr.height > innerHeight - 8) y = r.top - pr.height - 6;
+    pop.style.left = x + "px"; pop.style.top = y + "px";
+    if (focusIt) pop.querySelector("button.cur, button").focus();
+  }
+  function closePop() { pop.hidden = true; if (popCell) popCell.classList.remove("open"); popCell = null; }
+  const closeSoon = () => { clearTimeout(popTimer); popTimer = setTimeout(closePop, 220); };
+  $("availGrid").addEventListener("mouseover", (e) => { const c = e.target.closest("[data-cell]"); if (c) openPop(c); });
+  $("availGrid").addEventListener("mouseout", (e) => { if (e.target.closest("[data-cell]")) closeSoon(); });
+  $("availGrid").addEventListener("click", (e) => { const c = e.target.closest("[data-cell]"); if (c) openPop(c, e.detail === 0); });
+  $("availGrid").addEventListener("scroll", closePop, true);
+  pop.addEventListener("mouseenter", () => clearTimeout(popTimer));
+  pop.addEventListener("mouseleave", closeSoon);
+  pop.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-v]"); if (!b || !popCell) return;
+    const c = popCell, [mid, pid] = c.dataset.cell.split("|"), v = b.dataset.v;
+    const a = state.avail[mid] = state.avail[mid] || {};
+    if (v) a[pid] = v; else delete a[pid];
+    c.className = "cellbtn " + v; c.textContent = v === "x" ? "✕" : v === "p" ? "★" : "✓";
+    const lbl = v === "x" ? "can't come" : v === "p" ? "must include" : "available";
+    c.title = lbl; c.setAttribute("aria-label", c.getAttribute("aria-label").replace(/: [^:]*$/, ": " + lbl));
+    arrange(); closePop(); c.focus();
+    const usageCell = c.closest("tr").lastElementChild;
+    if (usageCell) usageCell.textContent = state.usage[mid] || 0;
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) { const c = popCell; closePop(); if (c) c.focus(); } });
+  document.addEventListener("click", (e) => { if (!pop.hidden && !e.target.closest("#availPop") && !e.target.closest("[data-cell]")) closePop(); });
+  window.addEventListener("scroll", () => { if (!pop.hidden) closePop(); }, { passive: true });
+  function bindOpt(id, key, check) {
+    const el = $(id);
+    if (check) el.checked = state.opts[key]; else el.value = state.opts[key];
+    el.addEventListener(check ? "change" : "input", () => { state.opts[key] = check ? el.checked : el.value; $("maxWrap").style.display = state.opts.repeat ? "" : "none"; refresh(); });
+  }
+  bindOpt("optRepeat", "repeat", true); bindOpt("optMax", "max", false); bindOpt("optDupNames", "dupNames", true);
+  bindOpt("optFill", "fill", true); bindOpt("optSub", "sub", true); bindOpt("optSplit", "split", false);
+  $("maxWrap").style.display = state.opts.repeat ? "" : "none";
+  document.querySelectorAll("input[name=layout]").forEach(r => r.addEventListener("change", () => { state.seat.layout = r.value; state.swaps = {}; refresh(); }));
+  $("seatRows").addEventListener("change", (e) => { state.seat.rows = e.target.value; state.swaps = {}; refresh(); });
+  $("instSide").addEventListener("change", (e) => { state.seat.side = e.target.value; refresh(); });
+  $("optConductor").addEventListener("change", (e) => { state.seat.conductor = e.target.checked; $("condNameWrap").style.visibility = e.target.checked ? "visible" : "hidden"; refresh(); });
+  $("condName").addEventListener("input", (e) => { state.seat.condName = e.target.value.trim(); if (state.step === 5) renderPreview(); });
+  $("tabs").addEventListener("click", (e) => { const t = e.target.closest("[data-tab]"); if (t) { state.tab = +t.dataset.tab; state.selSeat = null; renderResults(); } });
+  function seatClick(target) {
+    const g = target.closest("[data-seat]"); if (!g) return;
+    const id = g.dataset.seat, e = state.plan[state.tab];
+    if (!state.selSeat) { state.selSeat = id; renderResults(); return; }
+    if (state.selSeat !== id) { (state.swaps[e.p.id] = state.swaps[e.p.id] || []).push([state.selSeat, id]); toast("Seats swapped"); }
+    state.selSeat = null; e.seats = seatLayout(e); renderResults();
+  }
+  $("perfView").addEventListener("click", (e) => {
+    if (e.target.closest("#undoSwaps")) { delete state.swaps[state.plan[state.tab].p.id]; state.selSeat = null; refresh(); return; }
+    seatClick(e.target);
+  });
+  $("perfView").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest("[data-seat]")) { e.preventDefault(); seatClick(e.target); } });
+  $("shuffle").addEventListener("click", () => { state.seed = (Math.random() * 2 ** 31) | 0; state.swaps = {}; state.selSeat = null; refresh(); toast("New lineup generated"); });
+  $("dlPdf").addEventListener("click", buildPdf);
+  $("dlPng").addEventListener("click", dlPng);
+  $("dlCsv").addEventListener("click", () => save(`${slug(state.group)}-lineup.csv`, csvText()));
+  $("copyText").addEventListener("click", async () => {
+    const t = chatText();
+    try { await navigator.clipboard.writeText(t); $("copyBox").classList.remove("show"); toast("Copied. Paste it into your group chat."); }
+    catch (e) { $("copyArea").value = t; $("copyBox").classList.add("show"); $("copyArea").focus(); $("copyArea").select(); }
+  });
+  function clearAll() {
+    Object.assign(state, { singers: [], musicians: [], perfs: [], avail: {}, swaps: {}, group: "", facilitator: "", isExample: false, tab: 0, selSeat: null });
+    state.seat.condName = ""; $("condName").value = "";
+    $("groupName").value = ""; $("facilitator").value = ""; ["singerMsg", "musicianMsg"].forEach(i => setMsg(i, ""));
+  }
+  $("resetAll").addEventListener("click", () => { clearAll(); go(1, true); toast("Everything cleared"); });
+
+  // ---------- example ----------
+  const EX_S = `Maria Santos, S1\nJoy Dela Cruz, S1\nBea Navarro, S1\nCarla Mendoza, S2\nElla Ramos, S2\nGrace Villanueva, S2\nHannah Lim, S2\nAndrea Castillo, A1\nPatricia Gomez, A1\nRhea Bautista, A1\nLiza Aquino, A2\nNina Torres, A2\nCamille Ocampo, Mezzo\nPaolo Reyes, T1\nMiguel Garcia, T1\nJericho Tan, T2\nRafael Cruz, T2\nKevin Soriano, T2\nMark Lim, B1\nDaniel Flores, B1\nJosh Pascual, Bar\nCarlo Medina, B2\nArnel Salazar, B2\nLuis Fernandez, B2`;
+  const EX_M = `Leo Tan, Piano\nIsa Romero, Piano\nGrace Uy, Organ\nJun Rivera, Guitar\nAlex Co, Drums`;
+  function loadExample() {
+    clearAll();
+    const keep = state.opts.dupNames; state.opts.dupNames = true;
+    const v = state.view; state.view = "none";
+    addPeople("s", EX_S); addPeople("m", EX_M); state.opts.dupNames = keep; state.view = v;
+    const mk = (name, date, time, venue, cap, inst, custom) => ({ id: newId(), name, date, time, venue, cap, useCustom: !!custom, custom: custom || { S: "", A: "", T: "", B: "" }, inst });
+    state.perfs = [
+      mk("Spring Concert", "2027-03-20", "18:30", "City Arts Theater", 16, { piano: 1, organ: 0, guitar: 0, drums: 0 }),
+      mk("Sunday Worship Service", "2027-04-18", "09:00", "Main Hall", 12, { piano: 1, organ: 0, guitar: 1, drums: 1 }),
+      mk("Year-End Gala", "2027-06-12", "19:00", "Grand Ballroom", 20, { piano: 1, organ: 1, guitar: 0, drums: 0 }, { S: 6, A: 5, T: 4, B: 5 })
+    ];
+    const by = (n) => [...state.singers, ...state.musicians].find(m => m.name === n);
+    const setA = (n, pi, val) => { const m = by(n); (state.avail[m.id] = state.avail[m.id] || {})[state.perfs[pi].id] = val; };
+    setA("Rafael Cruz", 1, "x"); setA("Hannah Lim", 2, "x"); setA("Maria Santos", 2, "p"); setA("Leo Tan", 2, "x");
+    state.group = "Harmony Voices"; $("groupName").value = state.group; state.seat.condName = "Ms. Reyes"; $("condName").value = "Ms. Reyes";
+    state.isExample = true;
+    setMsg("singerMsg", "Example loaded. Adding your own singer will clear the example names.", true); setMsg("musicianMsg", "");
+    refresh();
+  }
+
+  // ---------- home animations ----------
+  (function heroPlan() {
+    const svg = $("heroPlan");
+    const rowsDef = [{ n: 9, r: 150, secs: "SSSSSAAAA" }, { n: 10, r: 215, secs: "SSSSSAAAAA" }, { n: 11, r: 280, secs: "TTTTTBBBBBB" }];
+    let out = "", i = 0;
+    rowsDef.forEach((row, ri) => {
+      const span = 2.2, step = span / (row.n - 1);
+      out += `<path d="M${(row.r * Math.sin(-span / 2 - .12)).toFixed(1)} ${(-row.r * Math.cos(-span / 2 - .12)).toFixed(1)} A${row.r} ${row.r} 0 0 1 ${(row.r * Math.sin(span / 2 + .12)).toFixed(1)} ${(-row.r * Math.cos(span / 2 + .12)).toFixed(1)}" fill="none" stroke="#e8edf5" stroke-width="34" stroke-linecap="round"/>`;
+      for (let c = 0; c < row.n; c++) {
+        const a = -span / 2 + c * step, x = row.r * Math.sin(a), y = -row.r * Math.cos(a), k = row.secs[c];
+        out += `<circle class="hd" style="animation-delay:${i * 45}ms, ${(i % 7) * 220}ms" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="13" fill="${SOFT[k]}" stroke="${COL[k]}" stroke-width="2.5"/>`;
+        i++;
+      }
+    });
+    out += `<rect class="hd" style="animation-delay:${i * 45}ms, 0ms" x="-262" y="-92" width="30" height="30" rx="7" fill="${SOFT.M}" stroke="${COL.M}" stroke-width="2.5"/>`;
+    out += `<circle cx="0" cy="-34" r="11" fill="#172036"/><text x="0" y="-30" text-anchor="middle" font-size="11" fill="#fff">♪</text>`;
+    svg.innerHTML = out;
+  })();
+  (function headlines() {
+    const H = [["Arrange your choir", "in minutes."], ["Balanced lineups", "for every event."], ["Seat plans your singers", "can read at a glance."], ["Sign-off sheets", "ready to print."], ["Fair turns", "for every voice."]];
+    const el = $("headline"); let i = 0; if (reduce) return;
+    setInterval(() => {
+      if (state.view !== "home" || document.hidden) return;
+      i = (i + 1) % H.length; el.classList.add("out");
+      setTimeout(() => { el.innerHTML = `${esc(H[i][0])} <em>${esc(H[i][1])}</em>`; el.classList.remove("out"); el.classList.add("pre"); void el.offsetWidth; el.classList.remove("pre"); }, 450);
+    }, 3200);
+  })();
+  const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("vis"); io.unobserve(e.target); } }), { threshold: .05 }) : null;
+  document.querySelectorAll(".hsec").forEach(s => io ? io.observe(s) : s.classList.add("vis"));
+
+  // ---------- background: drifting notes over staff lines ----------
+  (function bg() {
+    const cv = $("bgCanvas"), g = cv.getContext("2d");
+    const glyphs = ["♪", "♫", "♩", "♬"];
+    const tints = ["196,61,110", "184,116,11", "43,138,87", "58,99,196", "14,124,134", "107,79,187"];
+    let W, H, notes = [], t = 0;
+    function size() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth; H = window.innerHeight; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const count = Math.round(Math.min(34, W * H / 42000));
+      notes = Array.from({ length: count }, () => ({ x: Math.random() * W, y: Math.random() * H, s: 16 + Math.random() * 26, v: .15 + Math.random() * .35, d: Math.random() * 6.28, gl: glyphs[(Math.random() * 4) | 0], c: tints[(Math.random() * tints.length) | 0], a: .07 + Math.random() * .11 }));
+    }
+    function staff(y0, amp, phase) {
+      g.strokeStyle = "rgba(23,32,54,0.055)"; g.lineWidth = 1;
+      for (let l = 0; l < 5; l++) { g.beginPath(); for (let x = 0; x <= W; x += 16) { const y = y0 + l * 10 + Math.sin(x / 260 + phase) * amp; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+    }
+    function frame() {
+      g.clearRect(0, 0, W, H);
+      staff(H * .18, 14, t * .4); staff(H * .55, 18, t * .3 + 2); staff(H * .86, 12, t * .5 + 4);
+      notes.forEach(n => {
+        if (!reduce) { n.y -= n.v; n.d += .01; if (n.y < -40) { n.y = H + 30; n.x = Math.random() * W; } }
+        g.save(); g.translate(n.x + Math.sin(n.d) * 14, n.y); g.rotate(Math.sin(n.d) * .25);
+        g.fillStyle = `rgba(${n.c},${n.a})`; g.font = `${n.s}px "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols 2", sans-serif`; g.fillText(n.gl, 0, 0); g.restore();
+      });
+      t += .01;
+      if (!reduce) requestAnimationFrame(frame);
+    }
+    size(); window.addEventListener("resize", () => { size(); if (reduce) frame(); }); frame();
+  })();
+
+  showHome();
+})();
+</script>
+<footer class="ui-foot">
+  <div class="ui-foot-in">
+    <a class="ui-foot-brand" href="https://useful-indeed.com" title="More small, free tools on useful-indeed"><img src="useful-indeed/logo.svg" alt="useful-indeed logo" width="22" height="22"><span>© <span data-ui-year>2026</span> <b>useful-indeed</b></span></a>
+    <nav class="ui-foot-nav" aria-label="Site"><a href="about.html">About</a><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="contact.html">Contact</a></nav>
+    <button type="button" class="ui-foot-ver" data-ui-ver>v1.0 · Version log</button>
+  </div>
+</footer>
+<script src="useful-indeed/badge.js" defer></script>
+</body>
+</html>
