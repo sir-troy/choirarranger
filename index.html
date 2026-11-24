@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Choir Arranger</title>
 <meta name="description" content="Arrange balanced choir lineups, visual seat plans and printable sign-off sheets. Runs entirely in your browser.">
+<meta property="og:site_name" content="useful-indeed">
+<meta property="og:title" content="Choir Arranger">
+<meta property="og:description" content="Arrange balanced choir lineups, visual seat plans and printable sign-off sheets. Runs entirely in your browser.">
+<meta property="og:url" content="https://choirarranger.useful-indeed.com/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://choirarranger.useful-indeed.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9QZY61DZ0G"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-9QZY61DZ0G');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -373,7 +384,6 @@ footer.foot strong { color: var(--ink); }
     <div class="progress" id="progress" hidden><i id="progressBar"></i></div>
   </header>
 
-  <!-- ================= HOME ================= -->
   <section id="home" class="wrap">
     <div class="hero">
       <div>
@@ -447,10 +457,8 @@ footer.foot strong { color: var(--ink); }
     </div>
   </section>
 
-  <!-- ================= WIZARD ================= -->
   <section id="wizard" class="wrap wiz" hidden>
     <main class="card">
-      <!-- STEP 1 -->
       <section class="pane" data-step="1" aria-labelledby="s1h">
         <div class="sh"><div class="n">1</div><div><div class="of">Step 1 of 6</div><h2 id="s1h">Who's singing?</h2><p>Add each choir member with their voice part. You can also paste a list or upload a file.</p></div></div>
         <div class="grid2">
@@ -489,7 +497,6 @@ footer.foot strong { color: var(--ink); }
         <div id="singerList"></div>
       </section>
 
-      <!-- STEP 2 -->
       <section class="pane" data-step="2" aria-labelledby="s2h">
         <div class="sh"><div class="n">2</div><div><div class="of">Step 2 of 6</div><h2 id="s2h">Any musicians?</h2><p>Add pianists, organists, guitarists, drummers or others. No musicians? Just press Next.</p></div></div>
         <form class="box" id="musicianForm" novalidate>
@@ -517,14 +524,12 @@ footer.foot strong { color: var(--ink); }
         <div id="musicianList"></div>
       </section>
 
-      <!-- STEP 3 -->
       <section class="pane" data-step="3" aria-labelledby="s3h">
         <div class="sh"><div class="n">3</div><div><div class="of">Step 3 of 6</div><h2 id="s3h">When are you performing?</h2><p>Add each performance and how many singers and musicians you need. Sections split automatically unless you set exact numbers.</p></div></div>
         <div id="perfList" style="display:grid;gap:12px"></div>
         <div><button class="btn primary" id="addPerf" type="button">+ Add a performance</button></div>
       </section>
 
-      <!-- STEP 4 -->
       <section class="pane" data-step="4" aria-labelledby="s4h">
         <div class="sh"><div class="n">4</div><div><div class="of">Step 4 of 6</div><h2 id="s4h">Who's available, and what are the rules?</h2><p>Everyone starts as available. Point at a box (or tap it) and choose Available, Can't come, or Must include.</p></div></div>
         <div class="legend">
@@ -549,7 +554,6 @@ footer.foot strong { color: var(--ink); }
         </div>
       </section>
 
-      <!-- STEP 5 -->
       <section class="pane" data-step="5" aria-labelledby="s5h">
         <div class="sh"><div class="n">5</div><div><div class="of">Step 5 of 6</div><h2 id="s5h">How should the choir stand?</h2><p>Pick a formation. Each performance gets its own seat plan, and you can fine-tune it in the next step.</p></div></div>
         <fieldset style="border:0;padding:0;margin:0"><legend class="sr">Formation</legend>
@@ -575,7 +579,6 @@ footer.foot strong { color: var(--ink); }
         <p class="hint">Row 1 is closest to the audience. Seats are numbered left to right as the audience sees them.</p>
       </section>
 
-      <!-- STEP 6 -->
       <section class="pane" data-step="6" aria-labelledby="s6h">
         <div class="sh"><div class="n">6</div><div><div class="of">Step 6 of 6</div><h2 id="s6h">Your arrangement is ready</h2><p>Review each performance. Click two singers on the seat plan to swap their seats. Then download the PDF.</p></div></div>
         <div class="tiles" id="tiles"></div>
